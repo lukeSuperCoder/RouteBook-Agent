@@ -19,3 +19,21 @@
 ## 项目文档
 
 需求、接口设计和调研记录见 [文档中心](docs/README.md)。
+
+## LangGraph 最小原型
+
+仓库包含一个不依赖真实 LLM、地图 API 或数据库的可运行原型，用来演示
+State、条件路由、`interrupt()`、checkpoint 和 `Command(resume=...)`。
+
+```bash
+uv sync --extra dev --python 3.12
+uv run python -m examples.langgraph_minimal
+```
+
+直接回车使用内置的南京三日游需求；流程会在“鼓楼”地点消歧处暂停，选择后恢复并生成简化行程。
+
+运行自动化测试：
+
+```bash
+uv run pytest
+```

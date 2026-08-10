@@ -1,0 +1,17 @@
+[project]
+name = "routebook-agent"
+version = "0.1.0"
+description = "RouteBook Agent learning prototypes"
+requires-python = ">=3.12,<3.15"
+dependencies = [
+    "langgraph>=1.0,<2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<10.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
