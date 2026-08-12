@@ -22,15 +22,29 @@
 
 ## LangGraph 最小原型
 
-仓库包含一个不依赖真实 LLM、地图 API 或数据库的可运行原型，用来演示
-State、条件路由、`interrupt()`、checkpoint 和 `Command(resume=...)`。
+仓库包含一个接入 Anthropic 兼容模型和高德 Web 服务 API 的可运行原型，用来演示
+AI 结构化需求提取、真实 POI 搜索、State、条件路由、`interrupt()`、checkpoint
+和 `Command(resume=...)`。
 
 ```bash
 uv sync --extra dev --python 3.12
+cp .env.example .env
+# 编辑 .env，填写 ANTHROPIC_API_KEY 和 AMAP_API_KEY
 uv run python -m examples.langgraph_minimal
 ```
 
-直接回车使用内置的南京三日游需求；流程会在“鼓楼”地点消歧处暂停，选择后恢复并生成简化行程。
+默认配置使用 `https://open.bigmodel.cn/api/anthropic` 和 `glm-5`。API Key 仅从
+`.env` 或当前 shell 环境读取，`.env` 已被 Git 忽略。
+
+`AMAP_API_KEY` 必须是在高德开放平台申请的“Web 服务 API”类型 Key，仅由后端使用。
+
+直接回车使用内置的南京三日游需求。AI 会先提取目的地、天数和必去地点；如果用户
+只提供“北京三日游”这类宽泛需求，AI 会按约一天一个主要地点补充推荐。随后
+逐个调用高德 `/v5/place/text` 搜索真实 POI。唯一精确候选会自动确认，多个合理候选
+会通过 `interrupt()` 暂停供用户选择，然后恢复并继续搜索剩余地点。
+
+CLI 默认以 `INFO` 级别输出模型调用、LangGraph 节点切换、高德搜索、自动确认、
+暂停和恢复日志。日志不会输出 API Key 或包含 Key 的完整请求 URL。
 
 运行自动化测试：
 
