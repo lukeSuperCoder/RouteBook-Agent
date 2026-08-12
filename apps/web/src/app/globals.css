@@ -1,0 +1,378 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #efe9dd;
+  --ink: #18211c;
+  --muted: #6f756e;
+  --line: rgba(24, 33, 28, 0.18);
+  --signal: #ef5b2a;
+  --moss: #184f3a;
+  --cream: #f8f3e8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--paper);
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--ink);
+  background:
+    linear-gradient(90deg, transparent 49.85%, rgba(24, 33, 28, 0.055) 50%, transparent 50.15%),
+    radial-gradient(circle at 78% 18%, rgba(239, 91, 42, 0.11), transparent 22rem),
+    var(--paper);
+  font-family: "Avenir Next", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+body::before {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  content: "";
+  opacity: 0.25;
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 31px,
+    rgba(24, 33, 28, 0.08) 32px
+  );
+  pointer-events: none;
+}
+
+main {
+  width: min(1440px, 100%);
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 28px clamp(22px, 4vw, 68px) 24px;
+  display: flex;
+  flex-direction: column;
+}
+
+.masthead,
+footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--ink);
+  padding-top: 14px;
+  font-size: 0.7rem;
+  letter-spacing: 0.13em;
+}
+
+.masthead p,
+footer p {
+  margin: 0;
+}
+
+.wordmark {
+  color: inherit;
+  text-decoration: none;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  font-size: 1rem;
+}
+
+.wordmark span {
+  color: var(--signal);
+  margin: 0 0.14em;
+}
+
+.hero-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(390px, 0.92fr);
+  align-items: center;
+  gap: clamp(52px, 8vw, 130px);
+  padding: clamp(70px, 9vw, 145px) 0;
+}
+
+.hero-copy {
+  position: relative;
+}
+
+.route-code,
+.eyebrow {
+  margin: 0 0 22px;
+  color: var(--signal);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.19em;
+}
+
+h1,
+h2 {
+  font-family: "Iowan Old Style", "Baskerville", "Songti SC", serif;
+}
+
+h1 {
+  max-width: 760px;
+  margin: 0;
+  font-size: clamp(4.4rem, 8.5vw, 9rem);
+  font-weight: 400;
+  line-height: 0.83;
+  letter-spacing: -0.07em;
+}
+
+h1 em {
+  color: var(--moss);
+  font-weight: 400;
+}
+
+.lede {
+  max-width: 530px;
+  margin: 44px 0 0 clamp(0px, 8vw, 130px);
+  font-size: clamp(1rem, 1.3vw, 1.2rem);
+  line-height: 1.85;
+}
+
+.scope-note {
+  display: flex;
+  gap: 14px;
+  max-width: 360px;
+  margin: 36px 0 0 clamp(0px, 8vw, 130px);
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.65;
+}
+
+.scope-note span {
+  color: var(--signal);
+  font-size: 1.1rem;
+}
+
+.scope-note p {
+  margin: 0;
+}
+
+.status-board {
+  position: relative;
+  padding: clamp(28px, 4vw, 52px);
+  color: var(--cream);
+  background: var(--moss);
+  box-shadow: 18px 18px 0 rgba(24, 33, 28, 0.12);
+}
+
+.status-board::before {
+  position: absolute;
+  top: -9px;
+  right: 44px;
+  width: 64px;
+  height: 18px;
+  content: "";
+  background: var(--signal);
+}
+
+.status-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 38px;
+}
+
+.status-heading .eyebrow {
+  margin-bottom: 8px;
+  color: #ffb899;
+}
+
+h2 {
+  margin: 0;
+  font-size: clamp(2rem, 3vw, 3.2rem);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+}
+
+.readiness {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 0;
+  white-space: nowrap;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+}
+
+.readiness span,
+.state-mark {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #a7efbb;
+  box-shadow: 0 0 0 5px rgba(167, 239, 187, 0.12);
+}
+
+.readiness.pending span {
+  background: #ffb899;
+  box-shadow: 0 0 0 5px rgba(255, 184, 153, 0.12);
+}
+
+.status-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid rgba(248, 243, 232, 0.25);
+}
+
+.status-row {
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid rgba(248, 243, 232, 0.18);
+}
+
+.sequence {
+  color: rgba(248, 243, 232, 0.42);
+  font-family: ui-monospace, "SFMono-Regular", monospace;
+  font-size: 0.7rem;
+}
+
+.service-name {
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.service-state {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: rgba(248, 243, 232, 0.72);
+  font-size: 0.72rem;
+}
+
+.service-state .state-mark {
+  width: 6px;
+  height: 6px;
+  box-shadow: none;
+}
+
+.state-missing .state-mark,
+.state-unavailable .state-mark,
+.state-unreachable .state-mark,
+.state-unknown .state-mark {
+  background: #ff8e63;
+}
+
+.checked-at {
+  margin: 22px 0 0;
+  color: rgba(248, 243, 232, 0.48);
+  font-family: ui-monospace, "SFMono-Regular", monospace;
+  font-size: 0.63rem;
+}
+
+footer {
+  color: var(--muted);
+}
+
+.loading-shell,
+.error-shell {
+  justify-content: center;
+  max-width: 900px;
+}
+
+.loading-shell h1,
+.error-shell h1 {
+  font-size: clamp(3.4rem, 8vw, 7rem);
+}
+
+.loading-line {
+  width: 100%;
+  height: 3px;
+  margin-top: 48px;
+  overflow: hidden;
+  background: var(--line);
+}
+
+.loading-line::after {
+  display: block;
+  width: 34%;
+  height: 100%;
+  content: "";
+  background: var(--signal);
+  animation: route-progress 1.2s ease-in-out infinite alternate;
+}
+
+.error-shell p:not(.eyebrow) {
+  margin: 34px 0 24px;
+}
+
+.error-shell button {
+  width: fit-content;
+  border: 0;
+  padding: 13px 22px;
+  color: var(--cream);
+  background: var(--moss);
+  font: inherit;
+  cursor: pointer;
+}
+
+.error-shell button:focus-visible,
+.wordmark:focus-visible {
+  outline: 3px solid var(--signal);
+  outline-offset: 4px;
+}
+
+@keyframes route-progress {
+  from { transform: translateX(0); }
+  to { transform: translateX(190%); }
+}
+
+@media (max-width: 900px) {
+  .hero-grid {
+    grid-template-columns: 1fr;
+    padding: 70px 0;
+  }
+
+  .lede,
+  .scope-note {
+    margin-left: 0;
+  }
+
+  h1 {
+    font-size: clamp(4rem, 17vw, 7rem);
+  }
+
+  footer {
+    align-items: flex-start;
+    gap: 16px;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 520px) {
+  .masthead p {
+    display: none;
+  }
+
+  .status-heading {
+    flex-direction: column;
+  }
+
+  .status-row {
+    grid-template-columns: 36px 1fr;
+  }
+
+  .service-state {
+    grid-column: 2;
+    padding-bottom: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .loading-line::after {
+    animation: none;
+  }
+}

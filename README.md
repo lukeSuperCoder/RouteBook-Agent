@@ -6,7 +6,14 @@
 
 ## 当前阶段
 
-项目正在进行一期最小功能开发，当前范围包括：
+项目已建立一期第一阶段正式工程基线，当前可运行能力包括：
+
+- FastAPI、Celery、PostgreSQL、Redis 与 LangGraph PostgreSQL Checkpointer；
+- 创建路书、异步执行空工作流、保存不可变版本 1；
+- 幂等创建、Worker 重投保护、乐观版本冲突与 SSE 进度；
+- Next.js 工程状态页和 API/OpenAPI/JSON Schema 合同。
+
+后续一期范围包括：
 
 - 对话式旅行需求收集；
 - Agent 流程编排；
@@ -50,4 +57,47 @@ CLI 默认以 `INFO` 级别输出模型调用、LangGraph 节点切换、高德�
 
 ```bash
 uv run pytest
+```
+
+## 正式工程基线
+
+启动完整第一阶段服务：
+
+```bash
+docker compose up --build
+```
+
+该命令提供团队一致的 PostgreSQL 18 + Redis 8 环境。若本机已有 PostgreSQL 16+，可直接复用：只启动缺失的 Redis（`docker compose up -d redis`），并将 `DATABASE_URL`、`LANGGRAPH_DATABASE_URL` 指向专用 RouteBook 数据库，无需下载 PostgreSQL 镜像。
+
+- Web 状态页：`http://localhost:3000`
+- FastAPI 文档：`http://localhost:8000/docs`
+- 就绪检查：`http://localhost:8000/health/ready`
+
+创建一份路书并调度基础工作流：
+
+```bash
+curl -X POST http://localhost:8000/api/routebooks \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: routebook-demo-001' \
+  -d '{"title":"武汉三日路书"}'
+```
+
+本地分别运行时，先复制 `.env.example` 并启动 PostgreSQL、Redis，然后执行：
+
+```bash
+uv sync --extra dev --python 3.12
+uv run alembic upgrade head
+uv run python -m services.api.app.checkpoint_setup
+uv run uvicorn services.api.app.main:app --reload
+uv run celery -A services.api.app.worker:celery_app worker --loglevel=INFO
+
+cd apps/web
+pnpm install
+pnpm dev
+```
+
+合同文件由 Pydantic 与 FastAPI 生成；修改 Schema 或 API 后运行：
+
+```bash
+uv run python -m scripts.export_contracts
 ```

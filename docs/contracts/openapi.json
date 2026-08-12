@@ -1,0 +1,1427 @@
+{
+  "components": {
+    "schemas": {
+      "CreateRouteBookRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "default": "未命名路书",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "title": "CreateRouteBookRequest",
+        "type": "object"
+      },
+      "ErrorItem": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": true,
+            "title": "Details",
+            "type": "object"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "request_id": {
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "request_id"
+        ],
+        "title": "ErrorItem",
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorItem"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ErrorResponse",
+        "type": "object"
+      },
+      "FactStatus": {
+        "enum": [
+          "verified",
+          "unverified",
+          "stale",
+          "unavailable",
+          "conflicted",
+          "proposed"
+        ],
+        "title": "FactStatus",
+        "type": "string"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "checks": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Checks",
+            "type": "object"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "ItineraryDaySnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "day_number": {
+            "minimum": 1.0,
+            "title": "Day Number",
+            "type": "integer"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "place_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Place Ids",
+            "type": "array"
+          },
+          "segment_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Segment Ids",
+            "type": "array"
+          },
+          "weather_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Weather Refs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "day_number"
+        ],
+        "title": "ItineraryDaySnapshot",
+        "type": "object"
+      },
+      "PlaceSnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "default": "",
+            "title": "Address",
+            "type": "string"
+          },
+          "category_normalized": {
+            "default": "",
+            "title": "Category Normalized",
+            "type": "string"
+          },
+          "category_raw": {
+            "default": "",
+            "title": "Category Raw",
+            "type": "string"
+          },
+          "coordinate_system": {
+            "default": "GCJ-02",
+            "title": "Coordinate System",
+            "type": "string"
+          },
+          "district": {
+            "default": "",
+            "title": "District",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "latitude": {
+            "title": "Latitude",
+            "type": "number"
+          },
+          "longitude": {
+            "title": "Longitude",
+            "type": "number"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_place_id": {
+            "title": "Provider Place Id",
+            "type": "string"
+          },
+          "semantic_type": {
+            "default": "unknown",
+            "title": "Semantic Type",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FactStatus"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "provider_place_id",
+          "name",
+          "longitude",
+          "latitude",
+          "status"
+        ],
+        "title": "PlaceSnapshot",
+        "type": "object"
+      },
+      "RequirementSnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "companions": {
+            "$ref": "#/components/schemas/RequirementValue_list_str__"
+          },
+          "crowd_tolerance": {
+            "$ref": "#/components/schemas/RequirementValue_str_"
+          },
+          "days": {
+            "$ref": "#/components/schemas/RequirementValue_int_"
+          },
+          "destination": {
+            "$ref": "#/components/schemas/RequirementValue_str_"
+          },
+          "excluded_place_ids": {
+            "$ref": "#/components/schemas/RequirementValue_list_UUID__"
+          },
+          "intensity": {
+            "$ref": "#/components/schemas/RequirementValue_str_"
+          },
+          "must_visit_place_ids": {
+            "$ref": "#/components/schemas/RequirementValue_list_UUID__"
+          },
+          "optional_place_ids": {
+            "$ref": "#/components/schemas/RequirementValue_list_UUID__"
+          },
+          "origin": {
+            "$ref": "#/components/schemas/RequirementValue_str_"
+          },
+          "start_date": {
+            "$ref": "#/components/schemas/RequirementValue_date_"
+          },
+          "suburban_acceptance": {
+            "$ref": "#/components/schemas/RequirementValue_bool_"
+          },
+          "themes": {
+            "$ref": "#/components/schemas/RequirementValue_list_str__"
+          },
+          "transport_mode": {
+            "$ref": "#/components/schemas/RequirementValue_str_"
+          },
+          "visited_place_ids": {
+            "$ref": "#/components/schemas/RequirementValue_list_UUID__"
+          }
+        },
+        "title": "RequirementSnapshot",
+        "type": "object"
+      },
+      "RequirementSource": {
+        "enum": [
+          "explicit",
+          "inferred",
+          "default",
+          "missing"
+        ],
+        "title": "RequirementSource",
+        "type": "string"
+      },
+      "RequirementValue_bool_": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "default": 0.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "source": {
+            "$ref": "#/components/schemas/RequirementSource",
+            "default": "missing"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "title": "RequirementValue[bool]",
+        "type": "object"
+      },
+      "RequirementValue_date_": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "default": 0.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "source": {
+            "$ref": "#/components/schemas/RequirementSource",
+            "default": "missing"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "title": "RequirementValue[date]",
+        "type": "object"
+      },
+      "RequirementValue_int_": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "default": 0.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "source": {
+            "$ref": "#/components/schemas/RequirementSource",
+            "default": "missing"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "title": "RequirementValue[int]",
+        "type": "object"
+      },
+      "RequirementValue_list_UUID__": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "default": 0.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "source": {
+            "$ref": "#/components/schemas/RequirementSource",
+            "default": "missing"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "title": "RequirementValue[list[UUID]]",
+        "type": "object"
+      },
+      "RequirementValue_list_str__": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "default": 0.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "source": {
+            "$ref": "#/components/schemas/RequirementSource",
+            "default": "missing"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "title": "RequirementValue[list[str]]",
+        "type": "object"
+      },
+      "RequirementValue_str_": {
+        "additionalProperties": false,
+        "properties": {
+          "confidence": {
+            "default": 0.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "source": {
+            "$ref": "#/components/schemas/RequirementSource",
+            "default": "missing"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "title": "RequirementValue[str]",
+        "type": "object"
+      },
+      "RouteBookCreationAccepted": {
+        "additionalProperties": false,
+        "properties": {
+          "events_url": {
+            "title": "Events Url",
+            "type": "string"
+          },
+          "routebook_id": {
+            "format": "uuid",
+            "title": "Routebook Id",
+            "type": "string"
+          },
+          "routebook_status": {
+            "$ref": "#/components/schemas/RouteBookStatus"
+          },
+          "status_url": {
+            "title": "Status Url",
+            "type": "string"
+          },
+          "workflow_run_id": {
+            "format": "uuid",
+            "title": "Workflow Run Id",
+            "type": "string"
+          },
+          "workflow_status": {
+            "$ref": "#/components/schemas/WorkflowStatus"
+          }
+        },
+        "required": [
+          "routebook_id",
+          "workflow_run_id",
+          "routebook_status",
+          "workflow_status",
+          "status_url",
+          "events_url"
+        ],
+        "title": "RouteBookCreationAccepted",
+        "type": "object"
+      },
+      "RouteBookRead": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current_version": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RouteBookVersionRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "current_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Version Id"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "latest_final_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Final Version Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RouteBookStatus"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status",
+          "current_version_id",
+          "latest_final_version_id",
+          "current_version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "RouteBookRead",
+        "type": "object"
+      },
+      "RouteBookSnapshotV1": {
+        "additionalProperties": false,
+        "properties": {
+          "days_plan": {
+            "items": {
+              "$ref": "#/components/schemas/ItineraryDaySnapshot"
+            },
+            "title": "Days Plan",
+            "type": "array"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "places": {
+            "items": {
+              "$ref": "#/components/schemas/PlaceSnapshot"
+            },
+            "title": "Places",
+            "type": "array"
+          },
+          "requirements": {
+            "$ref": "#/components/schemas/RequirementSnapshot"
+          },
+          "route_segments": {
+            "items": {
+              "$ref": "#/components/schemas/RouteSegmentSnapshot"
+            },
+            "title": "Route Segments",
+            "type": "array"
+          },
+          "schema_version": {
+            "const": 1,
+            "default": 1,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "weather": {
+            "items": {
+              "$ref": "#/components/schemas/WeatherSnapshot"
+            },
+            "title": "Weather",
+            "type": "array"
+          }
+        },
+        "title": "RouteBookSnapshotV1",
+        "type": "object"
+      },
+      "RouteBookStatus": {
+        "enum": [
+          "draft",
+          "planning",
+          "pending_confirmation",
+          "editable",
+          "blocked",
+          "final"
+        ],
+        "title": "RouteBookStatus",
+        "type": "string"
+      },
+      "RouteBookVersionRead": {
+        "additionalProperties": false,
+        "properties": {
+          "change_summary": {
+            "title": "Change Summary",
+            "type": "string"
+          },
+          "change_type": {
+            "title": "Change Type",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "parent_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Version Id"
+          },
+          "routebook_id": {
+            "format": "uuid",
+            "title": "Routebook Id",
+            "type": "string"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/RouteBookSnapshotV1"
+          },
+          "source_user_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source User Message"
+          },
+          "version_number": {
+            "title": "Version Number",
+            "type": "integer"
+          },
+          "workflow_run_id": {
+            "format": "uuid",
+            "title": "Workflow Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "routebook_id",
+          "version_number",
+          "parent_version_id",
+          "snapshot",
+          "change_type",
+          "change_summary",
+          "source_user_message",
+          "workflow_run_id",
+          "created_at"
+        ],
+        "title": "RouteBookVersionRead",
+        "type": "object"
+      },
+      "RouteSegmentSnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "destination_place_id": {
+            "format": "uuid",
+            "title": "Destination Place Id",
+            "type": "string"
+          },
+          "distance_meters": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance Meters"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "origin_place_id": {
+            "format": "uuid",
+            "title": "Origin Place Id",
+            "type": "string"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "queried_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queried At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FactStatus"
+          }
+        },
+        "required": [
+          "id",
+          "origin_place_id",
+          "destination_place_id",
+          "mode",
+          "status"
+        ],
+        "title": "RouteSegmentSnapshot",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "WeatherSnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "forecast_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forecast At"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "place_id": {
+            "format": "uuid",
+            "title": "Place Id",
+            "type": "string"
+          },
+          "provider_updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Updated At"
+          },
+          "queried_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queried At"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FactStatus"
+          }
+        },
+        "required": [
+          "ref",
+          "place_id",
+          "status"
+        ],
+        "title": "WeatherSnapshot",
+        "type": "object"
+      },
+      "WorkflowRunRead": {
+        "additionalProperties": false,
+        "properties": {
+          "base_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Version Id"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current_stage": {
+            "$ref": "#/components/schemas/WorkflowStage"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "proposal_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposal Id"
+          },
+          "result_version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Version Id"
+          },
+          "routebook_id": {
+            "format": "uuid",
+            "title": "Routebook Id",
+            "type": "string"
+          },
+          "run_type": {
+            "$ref": "#/components/schemas/WorkflowRunType"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowStatus"
+          }
+        },
+        "required": [
+          "id",
+          "routebook_id",
+          "run_type",
+          "base_version_id",
+          "result_version_id",
+          "status",
+          "current_stage",
+          "proposal_id",
+          "error_code",
+          "started_at",
+          "completed_at",
+          "created_at"
+        ],
+        "title": "WorkflowRunRead",
+        "type": "object"
+      },
+      "WorkflowRunType": {
+        "enum": [
+          "create",
+          "edit",
+          "refresh",
+          "finalize"
+        ],
+        "title": "WorkflowRunType",
+        "type": "string"
+      },
+      "WorkflowStage": {
+        "enum": [
+          "queued",
+          "extracting_requirements",
+          "waiting_for_clarification",
+          "resolving_places",
+          "waiting_for_place_confirmation",
+          "planning_days",
+          "fetching_routes",
+          "fetching_weather",
+          "validating",
+          "waiting_for_change_confirmation",
+          "saving_version",
+          "rendering_final_page",
+          "completed",
+          "failed"
+        ],
+        "title": "WorkflowStage",
+        "type": "string"
+      },
+      "WorkflowStatus": {
+        "enum": [
+          "queued",
+          "running",
+          "interrupted",
+          "completed",
+          "failed",
+          "cancelled"
+        ],
+        "title": "WorkflowStatus",
+        "type": "string"
+      }
+    }
+  },
+  "info": {
+    "title": "RouteBook Agent API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/routebooks": {
+      "post": {
+        "operationId": "create_routebook_api_routebooks_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRouteBookRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteBookCreationAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Create Routebook",
+        "tags": [
+          "routebooks"
+        ]
+      }
+    },
+    "/api/routebooks/{routebook_id}": {
+      "get": {
+        "operationId": "get_routebook_api_routebooks__routebook_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Routebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteBookRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Routebook",
+        "tags": [
+          "routebooks"
+        ]
+      }
+    },
+    "/api/routebooks/{routebook_id}/versions/{version_id}": {
+      "get": {
+        "operationId": "get_version_api_routebooks__routebook_id__versions__version_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Routebook Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteBookVersionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Version",
+        "tags": [
+          "routebooks"
+        ]
+      }
+    },
+    "/api/workflow-runs/{run_id}": {
+      "get": {
+        "operationId": "get_workflow_run_api_workflow_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Workflow Run",
+        "tags": [
+          "workflows"
+        ]
+      }
+    },
+    "/api/workflow-runs/{run_id}/events": {
+      "get": {
+        "operationId": "workflow_events_api_workflow_runs__run_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Workflow Events",
+        "tags": [
+          "workflows"
+        ]
+      }
+    },
+    "/health/live": {
+      "get": {
+        "operationId": "live_health_live_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Live",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "operationId": "ready_health_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Ready",
+        "tags": [
+          "health"
+        ]
+      }
+    }
+  }
+}

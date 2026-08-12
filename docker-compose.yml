@@ -1,0 +1,97 @@
+name: routebook-agent
+
+x-api-environment: &api-environment
+  APP_ENV: development
+  LOG_LEVEL: INFO
+  DATABASE_URL: postgresql+psycopg://routebook:routebook@postgres:5432/routebook
+  LANGGRAPH_DATABASE_URL: postgresql://routebook:routebook@postgres:5432/routebook?options=-csearch_path%3Dlanggraph
+  REDIS_URL: redis://redis:6379/1
+  CELERY_BROKER_URL: redis://redis:6379/0
+  API_CORS_ORIGINS: http://localhost:3000
+
+x-api-image: &api-image
+  build:
+    context: .
+    dockerfile: services/api/Dockerfile
+  environment: *api-environment
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: routebook
+      POSTGRES_USER: routebook
+      POSTGRES_PASSWORD: routebook
+    ports:
+      - "5432:5432"
+    volumes:
+      - routebook-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U routebook -d routebook"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:8-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  migrate:
+    <<: *api-image
+    command: ["sh", "-c", "uv run alembic upgrade head && uv run python -m services.api.app.checkpoint_setup"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *api-image
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready', timeout=2)",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  worker:
+    <<: *api-image
+    command: ["uv", "run", "celery", "-A", "services.api.app.worker:celery_app", "worker", "--loglevel=INFO", "--concurrency=2"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        API_INTERNAL_URL: http://api:8000
+    environment:
+      API_INTERNAL_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  routebook-postgres:

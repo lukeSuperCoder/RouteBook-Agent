@@ -1,0 +1,607 @@
+{
+  "$defs": {
+    "FactStatus": {
+      "enum": [
+        "verified",
+        "unverified",
+        "stale",
+        "unavailable",
+        "conflicted",
+        "proposed"
+      ],
+      "title": "FactStatus",
+      "type": "string"
+    },
+    "ItineraryDaySnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Date"
+        },
+        "day_number": {
+          "minimum": 1,
+          "title": "Day Number",
+          "type": "integer"
+        },
+        "notes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Notes",
+          "type": "array"
+        },
+        "place_ids": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": "Place Ids",
+          "type": "array"
+        },
+        "segment_ids": {
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": "Segment Ids",
+          "type": "array"
+        },
+        "weather_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Weather Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "day_number"
+      ],
+      "title": "ItineraryDaySnapshot",
+      "type": "object"
+    },
+    "PlaceSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "default": "",
+          "title": "Address",
+          "type": "string"
+        },
+        "category_normalized": {
+          "default": "",
+          "title": "Category Normalized",
+          "type": "string"
+        },
+        "category_raw": {
+          "default": "",
+          "title": "Category Raw",
+          "type": "string"
+        },
+        "coordinate_system": {
+          "default": "GCJ-02",
+          "title": "Coordinate System",
+          "type": "string"
+        },
+        "district": {
+          "default": "",
+          "title": "District",
+          "type": "string"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "latitude": {
+          "title": "Latitude",
+          "type": "number"
+        },
+        "longitude": {
+          "title": "Longitude",
+          "type": "number"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "provider_place_id": {
+          "title": "Provider Place Id",
+          "type": "string"
+        },
+        "semantic_type": {
+          "default": "unknown",
+          "title": "Semantic Type",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/FactStatus"
+        }
+      },
+      "required": [
+        "id",
+        "provider",
+        "provider_place_id",
+        "name",
+        "longitude",
+        "latitude",
+        "status"
+      ],
+      "title": "PlaceSnapshot",
+      "type": "object"
+    },
+    "RequirementSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "companions": {
+          "$ref": "#/$defs/RequirementValue_list_str__"
+        },
+        "crowd_tolerance": {
+          "$ref": "#/$defs/RequirementValue_str_"
+        },
+        "days": {
+          "$ref": "#/$defs/RequirementValue_int_"
+        },
+        "destination": {
+          "$ref": "#/$defs/RequirementValue_str_"
+        },
+        "excluded_place_ids": {
+          "$ref": "#/$defs/RequirementValue_list_UUID__"
+        },
+        "intensity": {
+          "$ref": "#/$defs/RequirementValue_str_"
+        },
+        "must_visit_place_ids": {
+          "$ref": "#/$defs/RequirementValue_list_UUID__"
+        },
+        "optional_place_ids": {
+          "$ref": "#/$defs/RequirementValue_list_UUID__"
+        },
+        "origin": {
+          "$ref": "#/$defs/RequirementValue_str_"
+        },
+        "start_date": {
+          "$ref": "#/$defs/RequirementValue_date_"
+        },
+        "suburban_acceptance": {
+          "$ref": "#/$defs/RequirementValue_bool_"
+        },
+        "themes": {
+          "$ref": "#/$defs/RequirementValue_list_str__"
+        },
+        "transport_mode": {
+          "$ref": "#/$defs/RequirementValue_str_"
+        },
+        "visited_place_ids": {
+          "$ref": "#/$defs/RequirementValue_list_UUID__"
+        }
+      },
+      "title": "RequirementSnapshot",
+      "type": "object"
+    },
+    "RequirementSource": {
+      "enum": [
+        "explicit",
+        "inferred",
+        "default",
+        "missing"
+      ],
+      "title": "RequirementSource",
+      "type": "string"
+    },
+    "RequirementValue_bool_": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "source": {
+          "$ref": "#/$defs/RequirementSource",
+          "default": "missing"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "title": "RequirementValue[bool]",
+      "type": "object"
+    },
+    "RequirementValue_date_": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "source": {
+          "$ref": "#/$defs/RequirementSource",
+          "default": "missing"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "title": "RequirementValue[date]",
+      "type": "object"
+    },
+    "RequirementValue_int_": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "source": {
+          "$ref": "#/$defs/RequirementSource",
+          "default": "missing"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "title": "RequirementValue[int]",
+      "type": "object"
+    },
+    "RequirementValue_list_UUID__": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "source": {
+          "$ref": "#/$defs/RequirementSource",
+          "default": "missing"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "title": "RequirementValue[list[UUID]]",
+      "type": "object"
+    },
+    "RequirementValue_list_str__": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "source": {
+          "$ref": "#/$defs/RequirementSource",
+          "default": "missing"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "title": "RequirementValue[list[str]]",
+      "type": "object"
+    },
+    "RequirementValue_str_": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "source": {
+          "$ref": "#/$defs/RequirementSource",
+          "default": "missing"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "title": "RequirementValue[str]",
+      "type": "object"
+    },
+    "RouteSegmentSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "destination_place_id": {
+          "format": "uuid",
+          "title": "Destination Place Id",
+          "type": "string"
+        },
+        "distance_meters": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Distance Meters"
+        },
+        "duration_seconds": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Seconds"
+        },
+        "id": {
+          "format": "uuid",
+          "title": "Id",
+          "type": "string"
+        },
+        "mode": {
+          "title": "Mode",
+          "type": "string"
+        },
+        "origin_place_id": {
+          "format": "uuid",
+          "title": "Origin Place Id",
+          "type": "string"
+        },
+        "provider": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider"
+        },
+        "queried_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Queried At"
+        },
+        "status": {
+          "$ref": "#/$defs/FactStatus"
+        }
+      },
+      "required": [
+        "id",
+        "origin_place_id",
+        "destination_place_id",
+        "mode",
+        "status"
+      ],
+      "title": "RouteSegmentSnapshot",
+      "type": "object"
+    },
+    "WeatherSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "forecast_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Forecast At"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "place_id": {
+          "format": "uuid",
+          "title": "Place Id",
+          "type": "string"
+        },
+        "provider_updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Updated At"
+        },
+        "queried_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Queried At"
+        },
+        "ref": {
+          "title": "Ref",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/FactStatus"
+        }
+      },
+      "required": [
+        "ref",
+        "place_id",
+        "status"
+      ],
+      "title": "WeatherSnapshot",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "days_plan": {
+      "items": {
+        "$ref": "#/$defs/ItineraryDaySnapshot"
+      },
+      "title": "Days Plan",
+      "type": "array"
+    },
+    "notes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Notes",
+      "type": "array"
+    },
+    "places": {
+      "items": {
+        "$ref": "#/$defs/PlaceSnapshot"
+      },
+      "title": "Places",
+      "type": "array"
+    },
+    "requirements": {
+      "$ref": "#/$defs/RequirementSnapshot"
+    },
+    "route_segments": {
+      "items": {
+        "$ref": "#/$defs/RouteSegmentSnapshot"
+      },
+      "title": "Route Segments",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "warnings": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "weather": {
+      "items": {
+        "$ref": "#/$defs/WeatherSnapshot"
+      },
+      "title": "Weather",
+      "type": "array"
+    }
+  },
+  "title": "RouteBookSnapshotV1",
+  "type": "object"
+}

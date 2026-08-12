@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "phase1-happy-path",
+      "kind": "normal",
+      "given": "有效标题和新的 Idempotency-Key",
+      "expect": "创建路书和 Workflow Run，Worker 保存版本 1，并完成进度事件"
+    },
+    {
+      "id": "phase1-idempotent-retry",
+      "kind": "retry",
+      "given": "相同 Idempotency-Key 和相同请求重复提交，Worker 任务重复投递",
+      "expect": "返回相同 IDs，数据库仅有一个正式版本"
+    },
+    {
+      "id": "phase1-idempotency-conflict",
+      "kind": "conflict",
+      "given": "相同 Idempotency-Key 对应不同标题",
+      "expect": "返回 IDEMPOTENCY_CONFLICT，不创建第二份路书"
+    },
+    {
+      "id": "phase1-version-conflict",
+      "kind": "concurrency",
+      "given": "两个 Workflow Run 基于同一版本提交",
+      "expect": "仅一个提交成功，另一个返回 VERSION_CONFLICT"
+    },
+    {
+      "id": "phase1-dependency-failure",
+      "kind": "failure",
+      "given": "任务代理不可用",
+      "expect": "返回 DEPENDENCY_UNAVAILABLE，已创建的幂等记录允许安全重试调度"
+    }
+  ]
+}
