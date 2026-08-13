@@ -19,6 +19,7 @@
 | 404 | `NOT_FOUND` | 路书、版本、Workflow Run 或提案不存在 |
 | 409 | `IDEMPOTENCY_CONFLICT` | 同一幂等键对应不同请求内容 |
 | 409 | `VERSION_CONFLICT` | 提交时基础版本已不是当前版本 |
+| 409 | `WORKFLOW_STATE_CONFLICT` | 工作流未处于可恢复的中断状态或操作顺序无效 |
 | 503 | `DEPENDENCY_UNAVAILABLE` | PostgreSQL、Redis 或任务代理不可用 |
 | 500 | `INTERNAL_ERROR` | 未分类内部错误；响应不暴露异常详情 |
 | 404 | `PLACE_NOT_FOUND` | 供应商没有返回符合条件的地点 |

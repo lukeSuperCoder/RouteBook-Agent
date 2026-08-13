@@ -48,6 +48,7 @@ jobs:
       - run: uv run alembic upgrade head
       - run: uv run python -m services.api.app.checkpoint_setup
       - run: uv run python -m scripts.export_contracts --check
+      - run: uv run python -m scripts.evaluate_phase3_requirements
       - run: uv run pytest -q
 
   frontend:

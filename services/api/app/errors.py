@@ -43,6 +43,12 @@ class VersionConflictError(AppError):
     public_message = "路书基础版本已变化，请基于最新版本重试。"
 
 
+class WorkflowStateConflictError(AppError):
+    code = "WORKFLOW_STATE_CONFLICT"
+    status_code = 409
+    public_message = "当前工作流状态不允许执行该操作。"
+
+
 class DependencyUnavailableError(AppError):
     code = "DEPENDENCY_UNAVAILABLE"
     status_code = 503

@@ -29,6 +29,7 @@ class RequirementValue(ApiModel, Generic[T]):
     value: T | None = None
     source: RequirementSource = RequirementSource.MISSING
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    confirmed: bool = False
 
 
 class RequirementSnapshot(ApiModel):
@@ -54,6 +55,19 @@ class RequirementSnapshot(ApiModel):
     visited_place_ids: RequirementValue[list[UUID]] = Field(
         default_factory=RequirementValue[list[UUID]]
     )
+    must_visit_place_texts: RequirementValue[list[str]] = Field(
+        default_factory=RequirementValue[list[str]]
+    )
+    optional_place_texts: RequirementValue[list[str]] = Field(
+        default_factory=RequirementValue[list[str]]
+    )
+    excluded_place_texts: RequirementValue[list[str]] = Field(
+        default_factory=RequirementValue[list[str]]
+    )
+    visited_place_texts: RequirementValue[list[str]] = Field(
+        default_factory=RequirementValue[list[str]]
+    )
+    notes: RequirementValue[list[str]] = Field(default_factory=RequirementValue[list[str]])
 
 
 class PlaceSnapshot(ApiModel):
@@ -164,6 +178,37 @@ class WorkflowRunRead(ApiModel):
     started_at: datetime | None
     completed_at: datetime | None
     created_at: datetime
+
+
+class RouteBookMessageCreate(ApiModel):
+    message_id: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=8, max_length=128)
+    ]
+    text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)]
+
+
+class RequirementResumeRequest(RouteBookMessageCreate):
+    interrupt_kind: Literal["requirement_clarification"]
+
+
+class ConversationMessageRead(ApiModel):
+    id: UUID
+    routebook_id: UUID
+    workflow_run_id: UUID
+    message_id: str
+    role: Literal["user", "assistant", "system"]
+    kind: Literal["requirement_input", "requirement_clarification", "status"]
+    payload: dict[str, Any]
+    created_at: datetime
+
+
+class RequirementWorkflowAccepted(ApiModel):
+    message: ConversationMessageRead
+    workflow_run_id: UUID
+    workflow_status: WorkflowStatus
+    reused: bool
+    status_url: str
+    events_url: str
 
 
 class ProposalRead(ApiModel):

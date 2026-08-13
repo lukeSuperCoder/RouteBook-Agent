@@ -21,21 +21,31 @@ from .enums import (
     WorkflowStage,
     WorkflowStatus,
 )
-from .errors import IdempotencyConflictError, NotFoundError, VersionConflictError
+from .errors import (
+    IdempotencyConflictError,
+    NotFoundError,
+    VersionConflictError,
+    WorkflowStateConflictError,
+)
 from .models import (
     ChangeProposalModel,
+    ConversationMessageModel,
     IdempotencyRecordModel,
+    LlmCallRecordModel,
     RouteBookModel,
     RouteBookVersionModel,
     WorkflowRunModel,
 )
 from .repositories import (
+    ConversationMessageRepository,
     IdempotencyRepository,
+    LlmCallRecordRepository,
     ProposalRepository,
     RouteBookRepository,
     VersionRepository,
     WorkflowRunRepository,
 )
+from .requirements.models import ExtractionTrace, RequirementPatch
 from .schemas import RouteBookSnapshotV1
 
 
@@ -232,6 +242,230 @@ class WorkflowService:
             run.completed_at = utc_now()
             session.flush()
         return run
+
+    @staticmethod
+    def mark_requirement_running(session: Session, run_id: UUID) -> WorkflowRunModel:
+        run = WorkflowRunRepository(session).get(run_id, for_update=True)
+        if run is None:
+            raise NotFoundError(details={"resource": "workflow_run"})
+        if run.status == WorkflowStatus.COMPLETED.value:
+            return run
+        run.status = WorkflowStatus.RUNNING.value
+        run.current_stage = WorkflowStage.EXTRACTING_REQUIREMENTS.value
+        run.started_at = run.started_at or utc_now()
+        run.error_code = None
+        routebook = RouteBookRepository(session).get(run.routebook_id)
+        if routebook is not None:
+            routebook.status = RouteBookStatus.PLANNING.value
+        session.flush()
+        return run
+
+    @staticmethod
+    def mark_interrupted(session: Session, run_id: UUID) -> WorkflowRunModel:
+        run = WorkflowRunRepository(session).get(run_id, for_update=True)
+        if run is None:
+            raise NotFoundError(details={"resource": "workflow_run"})
+        if run.status != WorkflowStatus.COMPLETED.value:
+            run.status = WorkflowStatus.INTERRUPTED.value
+            run.current_stage = WorkflowStage.WAITING_FOR_CLARIFICATION.value
+            routebook = RouteBookRepository(session).get(run.routebook_id)
+            if routebook is not None:
+                routebook.status = RouteBookStatus.PENDING_CONFIRMATION.value
+            session.flush()
+        return run
+
+
+@dataclass(frozen=True)
+class MessageWorkflowResult:
+    message: ConversationMessageModel
+    workflow_run_id: UUID
+    workflow_status: WorkflowStatus
+    reused: bool
+    should_dispatch: bool
+
+
+class RequirementMessageService:
+    @staticmethod
+    def start(
+        session: Session,
+        *,
+        routebook_id: UUID,
+        client_message_id: str,
+        text: str,
+    ) -> MessageWorkflowResult:
+        routebook = RouteBookRepository(session).get(routebook_id, for_update=True)
+        if routebook is None:
+            raise NotFoundError(details={"resource": "routebook"})
+        messages = ConversationMessageRepository(session)
+        existing = messages.get_by_client_id(routebook_id, client_message_id)
+        if existing is not None:
+            if existing.payload_jsonb.get("text") != text:
+                raise IdempotencyConflictError()
+            existing_run = WorkflowRunRepository(session).get(existing.workflow_run_id)
+            return MessageWorkflowResult(
+                existing,
+                existing.workflow_run_id,
+                WorkflowStatus(existing_run.status) if existing_run else WorkflowStatus.FAILED,
+                True,
+                existing_run is not None
+                and existing_run.status == WorkflowStatus.QUEUED.value,
+            )
+
+        run = WorkflowRunModel(
+            routebook_id=routebook_id,
+            run_type=(
+                WorkflowRunType.EDIT.value
+                if routebook.current_version_id is not None
+                else WorkflowRunType.CREATE.value
+            ),
+            base_version_id=routebook.current_version_id,
+            status=WorkflowStatus.QUEUED.value,
+            current_stage=WorkflowStage.QUEUED.value,
+        )
+        WorkflowRunRepository(session).add(run)
+        session.flush()
+        message = ConversationMessageModel(
+            routebook_id=routebook_id,
+            workflow_run_id=run.id,
+            client_message_id=client_message_id,
+            role="user",
+            kind="requirement_input",
+            payload_jsonb={"text": text},
+        )
+        messages.add(message)
+        session.flush()
+        return MessageWorkflowResult(message, run.id, WorkflowStatus.QUEUED, False, True)
+
+    @staticmethod
+    def resume(
+        session: Session,
+        *,
+        run_id: UUID,
+        client_message_id: str,
+        text: str,
+    ) -> MessageWorkflowResult:
+        run = WorkflowRunRepository(session).get(run_id, for_update=True)
+        if run is None:
+            raise NotFoundError(details={"resource": "workflow_run"})
+        messages = ConversationMessageRepository(session)
+        existing = messages.get_by_client_id(run.routebook_id, client_message_id)
+        if existing is not None:
+            if existing.workflow_run_id != run_id or existing.payload_jsonb.get("text") != text:
+                raise IdempotencyConflictError()
+            return MessageWorkflowResult(
+                existing,
+                run_id,
+                WorkflowStatus(run.status),
+                True,
+                run.status == WorkflowStatus.QUEUED.value,
+            )
+        if run.status != WorkflowStatus.INTERRUPTED.value:
+            raise WorkflowStateConflictError(
+                details={"status": run.status, "expected": WorkflowStatus.INTERRUPTED.value}
+            )
+        message = ConversationMessageModel(
+            routebook_id=run.routebook_id,
+            workflow_run_id=run_id,
+            client_message_id=client_message_id,
+            role="user",
+            kind="requirement_clarification",
+            payload_jsonb={"text": text},
+        )
+        messages.add(message)
+        run.status = WorkflowStatus.QUEUED.value
+        run.current_stage = WorkflowStage.QUEUED.value
+        routebook = RouteBookRepository(session).get(run.routebook_id)
+        if routebook is not None:
+            routebook.status = RouteBookStatus.PLANNING.value
+        session.flush()
+        return MessageWorkflowResult(message, run_id, WorkflowStatus.QUEUED, False, True)
+
+    @staticmethod
+    def record_clarification(
+        session: Session,
+        *,
+        run_id: UUID,
+        trigger_message_id: str,
+        payload: dict[str, Any],
+    ) -> ConversationMessageModel:
+        run = WorkflowRunRepository(session).get(run_id)
+        if run is None:
+            raise NotFoundError(details={"resource": "workflow_run"})
+        client_message_id = f"system-clarification-{trigger_message_id}"
+        messages = ConversationMessageRepository(session)
+        existing = messages.get_by_client_id(run.routebook_id, client_message_id)
+        if existing is not None:
+            existing.payload_jsonb = payload
+            session.flush()
+            return existing
+        message = ConversationMessageModel(
+            routebook_id=run.routebook_id,
+            workflow_run_id=run_id,
+            client_message_id=client_message_id,
+            role="assistant",
+            kind="requirement_clarification",
+            payload_jsonb=payload,
+        )
+        messages.add(message)
+        session.flush()
+        return message
+
+    @staticmethod
+    def record_failed_trace(
+        session: Session,
+        *,
+        run_id: UUID,
+        message_id: UUID,
+        prompt_version: str,
+        model: str,
+        attempt_count: int,
+    ) -> None:
+        records = LlmCallRecordRepository(session)
+        if records.exists(run_id, message_id, attempt_count):
+            return
+        records.add(
+            LlmCallRecordModel(
+                workflow_run_id=run_id,
+                message_id=message_id,
+                prompt_version=prompt_version,
+                model=model,
+                attempt_count=attempt_count,
+                latency_ms=0,
+                status="failed",
+                output_jsonb=None,
+                error_code="REQUIREMENT_EXTRACTION_FAILED",
+            )
+        )
+        session.flush()
+
+    @staticmethod
+    def record_trace(
+        session: Session,
+        *,
+        run_id: UUID,
+        message_id: UUID,
+        trace: ExtractionTrace,
+        patch: RequirementPatch,
+    ) -> None:
+        records = LlmCallRecordRepository(session)
+        if records.exists(run_id, message_id, trace.attempt_count):
+            return
+        records.add(
+            LlmCallRecordModel(
+                workflow_run_id=run_id,
+                message_id=message_id,
+                prompt_version=trace.prompt_version,
+                model=trace.model,
+                response_id=trace.response_id,
+                attempt_count=trace.attempt_count,
+                latency_ms=trace.latency_ms,
+                input_tokens=trace.input_tokens,
+                output_tokens=trace.output_tokens,
+                status="succeeded",
+                output_jsonb=patch.model_dump(mode="json"),
+            )
+        )
+        session.flush()
 
 
 class ProposalService:

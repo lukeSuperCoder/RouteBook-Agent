@@ -162,14 +162,26 @@
         "excluded_place_ids": {
           "$ref": "#/$defs/RequirementValue_list_UUID__"
         },
+        "excluded_place_texts": {
+          "$ref": "#/$defs/RequirementValue_list_str__"
+        },
         "intensity": {
           "$ref": "#/$defs/RequirementValue_str_"
         },
         "must_visit_place_ids": {
           "$ref": "#/$defs/RequirementValue_list_UUID__"
         },
+        "must_visit_place_texts": {
+          "$ref": "#/$defs/RequirementValue_list_str__"
+        },
+        "notes": {
+          "$ref": "#/$defs/RequirementValue_list_str__"
+        },
         "optional_place_ids": {
           "$ref": "#/$defs/RequirementValue_list_UUID__"
+        },
+        "optional_place_texts": {
+          "$ref": "#/$defs/RequirementValue_list_str__"
         },
         "origin": {
           "$ref": "#/$defs/RequirementValue_str_"
@@ -188,6 +200,9 @@
         },
         "visited_place_ids": {
           "$ref": "#/$defs/RequirementValue_list_UUID__"
+        },
+        "visited_place_texts": {
+          "$ref": "#/$defs/RequirementValue_list_str__"
         }
       },
       "title": "RequirementSnapshot",
@@ -212,6 +227,11 @@
           "minimum": 0.0,
           "title": "Confidence",
           "type": "number"
+        },
+        "confirmed": {
+          "default": false,
+          "title": "Confirmed",
+          "type": "boolean"
         },
         "source": {
           "$ref": "#/$defs/RequirementSource",
@@ -242,6 +262,11 @@
           "minimum": 0.0,
           "title": "Confidence",
           "type": "number"
+        },
+        "confirmed": {
+          "default": false,
+          "title": "Confirmed",
+          "type": "boolean"
         },
         "source": {
           "$ref": "#/$defs/RequirementSource",
@@ -274,6 +299,11 @@
           "title": "Confidence",
           "type": "number"
         },
+        "confirmed": {
+          "default": false,
+          "title": "Confirmed",
+          "type": "boolean"
+        },
         "source": {
           "$ref": "#/$defs/RequirementSource",
           "default": "missing"
@@ -303,6 +333,11 @@
           "minimum": 0.0,
           "title": "Confidence",
           "type": "number"
+        },
+        "confirmed": {
+          "default": false,
+          "title": "Confirmed",
+          "type": "boolean"
         },
         "source": {
           "$ref": "#/$defs/RequirementSource",
@@ -338,6 +373,11 @@
           "title": "Confidence",
           "type": "number"
         },
+        "confirmed": {
+          "default": false,
+          "title": "Confirmed",
+          "type": "boolean"
+        },
         "source": {
           "$ref": "#/$defs/RequirementSource",
           "default": "missing"
@@ -370,6 +410,11 @@
           "minimum": 0.0,
           "title": "Confidence",
           "type": "number"
+        },
+        "confirmed": {
+          "default": false,
+          "title": "Confirmed",
+          "type": "boolean"
         },
         "source": {
           "$ref": "#/$defs/RequirementSource",

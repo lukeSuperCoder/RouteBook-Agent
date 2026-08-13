@@ -29,25 +29,45 @@ from .errors import (
     ValidationAppError,
 )
 from .observability import configure_logging, request_id_context
-from .presenters import routebook_read, version_read, workflow_run_read
+from .presenters import (
+    conversation_message_read,
+    routebook_read,
+    version_read,
+    workflow_run_read,
+)
 from .progress import ProgressPublisher, build_progress_event, stream_progress
-from .repositories import RouteBookRepository, VersionRepository, WorkflowRunRepository
+from .repositories import (
+    ConversationMessageRepository,
+    RouteBookRepository,
+    VersionRepository,
+    WorkflowRunRepository,
+)
 from .schemas import (
+    ConversationMessageRead,
     CreateRouteBookRequest,
     ErrorResponse,
     HealthResponse,
+    RequirementResumeRequest,
+    RequirementWorkflowAccepted,
     RouteBookCreationAccepted,
+    RouteBookMessageCreate,
     RouteBookRead,
     RouteBookVersionRead,
     WorkflowRunRead,
 )
-from .services import RouteBookService, canonical_request_hash
-from .worker import dispatch_workflow
+from .services import (
+    MessageWorkflowResult,
+    RequirementMessageService,
+    RouteBookService,
+    canonical_request_hash,
+)
+from .worker import dispatch_requirement_workflow, dispatch_workflow
 
 settings = get_settings()
 log = logging.getLogger("routebook.api")
 IDEMPOTENCY_KEY_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
 WorkflowDispatcher = Callable[[UUID, str], None]
+RequirementWorkflowDispatcher = Callable[[UUID, UUID, str, bool], None]
 
 
 @asynccontextmanager
@@ -56,13 +76,21 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     yield
 
 
-def create_app(workflow_dispatcher: WorkflowDispatcher = dispatch_workflow) -> FastAPI:
+def _dispatch_requirement(run_id: UUID, message_id: UUID, request_id: str, resume: bool) -> None:
+    dispatch_requirement_workflow(run_id, message_id, request_id, resume=resume)
+
+
+def create_app(
+    workflow_dispatcher: WorkflowDispatcher = dispatch_workflow,
+    requirement_dispatcher: RequirementWorkflowDispatcher = _dispatch_requirement,
+) -> FastAPI:
     app = FastAPI(
         title="RouteBook Agent API",
         version=__version__,
         lifespan=lifespan,
     )
     app.state.workflow_dispatcher = workflow_dispatcher
+    app.state.requirement_dispatcher = requirement_dispatcher
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.api_cors_origins,
@@ -221,6 +249,60 @@ def create_app(workflow_dispatcher: WorkflowDispatcher = dispatch_workflow) -> F
         )
         return routebook_read(model, current)
 
+    @app.post(
+        "/api/routebooks/{routebook_id}/messages",
+        response_model=RequirementWorkflowAccepted,
+        status_code=202,
+        responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+        tags=["messages"],
+    )
+    def create_routebook_message(
+        routebook_id: UUID,
+        payload: RouteBookMessageCreate,
+        request: Request,
+        session: Session = Depends(get_session),
+        _principal: RequestPrincipal = Depends(get_request_principal),
+    ) -> RequirementWorkflowAccepted:
+        with session.begin():
+            result = RequirementMessageService.start(
+                session,
+                routebook_id=routebook_id,
+                client_message_id=payload.message_id,
+                text=payload.text,
+            )
+        if result.should_dispatch:
+            try:
+                request.app.state.requirement_dispatcher(
+                    result.workflow_run_id, result.message.id, request.state.request_id, False
+                )
+            except Exception as exc:
+                log.exception(
+                    "requirement workflow dispatch failed run_id=%s",
+                    result.workflow_run_id,
+                )
+                raise DependencyUnavailableError(
+                    details={"dependency": "celery_broker"}
+                ) from exc
+        return _requirement_accepted(result)
+
+    @app.get(
+        "/api/routebooks/{routebook_id}/messages",
+        response_model=list[ConversationMessageRead],
+        responses={404: {"model": ErrorResponse}},
+        tags=["messages"],
+    )
+    def get_routebook_messages(
+        routebook_id: UUID,
+        session: Session = Depends(get_session),
+        _principal: RequestPrincipal = Depends(get_request_principal),
+    ) -> list[ConversationMessageRead]:
+        if RouteBookRepository(session).get(routebook_id) is None:
+            raise NotFoundError(details={"resource": "routebook"})
+        return [
+            conversation_message_read(model)
+            for model in ConversationMessageRepository(session).list_for_routebook(routebook_id)
+        ]
+
     @app.get(
         "/api/routebooks/{routebook_id}/versions/{version_id}",
         response_model=RouteBookVersionRead,
@@ -272,7 +354,52 @@ def create_app(workflow_dispatcher: WorkflowDispatcher = dispatch_workflow) -> F
             },
         )
 
+    @app.post(
+        "/api/workflow-runs/{run_id}/resume",
+        response_model=RequirementWorkflowAccepted,
+        status_code=202,
+        responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+        tags=["workflows"],
+    )
+    def resume_requirement_workflow(
+        run_id: UUID,
+        payload: RequirementResumeRequest,
+        request: Request,
+        session: Session = Depends(get_session),
+        _principal: RequestPrincipal = Depends(get_request_principal),
+    ) -> RequirementWorkflowAccepted:
+        with session.begin():
+            result = RequirementMessageService.resume(
+                session,
+                run_id=run_id,
+                client_message_id=payload.message_id,
+                text=payload.text,
+            )
+        if result.should_dispatch:
+            try:
+                request.app.state.requirement_dispatcher(
+                    result.workflow_run_id, result.message.id, request.state.request_id, True
+                )
+            except Exception as exc:
+                log.exception("requirement resume dispatch failed run_id=%s", run_id)
+                raise DependencyUnavailableError(
+                    details={"dependency": "celery_broker"}
+                ) from exc
+        return _requirement_accepted(result)
+
     return app
+
+
+def _requirement_accepted(result: MessageWorkflowResult) -> RequirementWorkflowAccepted:
+    run_id = result.workflow_run_id
+    return RequirementWorkflowAccepted(
+        message=conversation_message_read(result.message),
+        workflow_run_id=run_id,
+        workflow_status=result.workflow_status,
+        reused=result.reused,
+        status_url=f"/api/workflow-runs/{run_id}",
+        events_url=f"/api/workflow-runs/{run_id}/events",
+    )
 
 
 def _error_response(

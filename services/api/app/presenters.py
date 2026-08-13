@@ -1,13 +1,32 @@
 from __future__ import annotations
 
 from .enums import RouteBookStatus, WorkflowRunType, WorkflowStage, WorkflowStatus
-from .models import RouteBookModel, RouteBookVersionModel, WorkflowRunModel
+from .models import (
+    ConversationMessageModel,
+    RouteBookModel,
+    RouteBookVersionModel,
+    WorkflowRunModel,
+)
 from .schemas import (
+    ConversationMessageRead,
     RouteBookRead,
     RouteBookSnapshotV1,
     RouteBookVersionRead,
     WorkflowRunRead,
 )
+
+
+def conversation_message_read(model: ConversationMessageModel) -> ConversationMessageRead:
+    return ConversationMessageRead(
+        id=model.id,
+        routebook_id=model.routebook_id,
+        workflow_run_id=model.workflow_run_id,
+        message_id=model.client_message_id,
+        role=model.role,
+        kind=model.kind,
+        payload=model.payload_jsonb,
+        created_at=model.created_at,
+    )
 
 
 def version_read(model: RouteBookVersionModel) -> RouteBookVersionRead:

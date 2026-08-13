@@ -28,6 +28,13 @@ class Settings(BaseSettings):
         default_factory=lambda: ["http://localhost:3000"]
     )
 
+    anthropic_api_key: SecretStr | None = None
+    anthropic_base_url: str = "https://api.anthropic.com"
+    model_id: str = "claude-haiku-4-5"
+    requirement_prompt_version: str = "requirement-extraction-v1"
+    requirement_max_attempts: int = Field(default=2, ge=1, le=3)
+    requirement_timeout_seconds: float = Field(default=20.0, gt=0, le=120)
+
     amap_api_key: SecretStr | None = None
     amap_base_url: str = "https://restapi.amap.com"
     qweather_api_key: SecretStr | None = None

@@ -1,6 +1,70 @@
 {
   "components": {
     "schemas": {
+      "ConversationMessageRead": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "requirement_input",
+              "requirement_clarification",
+              "status"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant",
+              "system"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "routebook_id": {
+            "format": "uuid",
+            "title": "Routebook Id",
+            "type": "string"
+          },
+          "workflow_run_id": {
+            "format": "uuid",
+            "title": "Workflow Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "routebook_id",
+          "workflow_run_id",
+          "message_id",
+          "role",
+          "kind",
+          "payload",
+          "created_at"
+        ],
+        "title": "ConversationMessageRead",
+        "type": "object"
+      },
       "CreateRouteBookRequest": {
         "additionalProperties": false,
         "properties": {
@@ -234,6 +298,35 @@
         "title": "PlaceSnapshot",
         "type": "object"
       },
+      "RequirementResumeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "interrupt_kind": {
+            "const": "requirement_clarification",
+            "title": "Interrupt Kind",
+            "type": "string"
+          },
+          "message_id": {
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Message Id",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "text",
+          "interrupt_kind"
+        ],
+        "title": "RequirementResumeRequest",
+        "type": "object"
+      },
       "RequirementSnapshot": {
         "additionalProperties": false,
         "properties": {
@@ -252,14 +345,26 @@
           "excluded_place_ids": {
             "$ref": "#/components/schemas/RequirementValue_list_UUID__"
           },
+          "excluded_place_texts": {
+            "$ref": "#/components/schemas/RequirementValue_list_str__"
+          },
           "intensity": {
             "$ref": "#/components/schemas/RequirementValue_str_"
           },
           "must_visit_place_ids": {
             "$ref": "#/components/schemas/RequirementValue_list_UUID__"
           },
+          "must_visit_place_texts": {
+            "$ref": "#/components/schemas/RequirementValue_list_str__"
+          },
+          "notes": {
+            "$ref": "#/components/schemas/RequirementValue_list_str__"
+          },
           "optional_place_ids": {
             "$ref": "#/components/schemas/RequirementValue_list_UUID__"
+          },
+          "optional_place_texts": {
+            "$ref": "#/components/schemas/RequirementValue_list_str__"
           },
           "origin": {
             "$ref": "#/components/schemas/RequirementValue_str_"
@@ -278,6 +383,9 @@
           },
           "visited_place_ids": {
             "$ref": "#/components/schemas/RequirementValue_list_UUID__"
+          },
+          "visited_place_texts": {
+            "$ref": "#/components/schemas/RequirementValue_list_str__"
           }
         },
         "title": "RequirementSnapshot",
@@ -302,6 +410,11 @@
             "minimum": 0.0,
             "title": "Confidence",
             "type": "number"
+          },
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
           },
           "source": {
             "$ref": "#/components/schemas/RequirementSource",
@@ -331,6 +444,11 @@
             "minimum": 0.0,
             "title": "Confidence",
             "type": "number"
+          },
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
           },
           "source": {
             "$ref": "#/components/schemas/RequirementSource",
@@ -362,6 +480,11 @@
             "title": "Confidence",
             "type": "number"
           },
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
           "source": {
             "$ref": "#/components/schemas/RequirementSource",
             "default": "missing"
@@ -390,6 +513,11 @@
             "minimum": 0.0,
             "title": "Confidence",
             "type": "number"
+          },
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
           },
           "source": {
             "$ref": "#/components/schemas/RequirementSource",
@@ -424,6 +552,11 @@
             "title": "Confidence",
             "type": "number"
           },
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
           "source": {
             "$ref": "#/components/schemas/RequirementSource",
             "default": "missing"
@@ -456,6 +589,11 @@
             "title": "Confidence",
             "type": "number"
           },
+          "confirmed": {
+            "default": false,
+            "title": "Confirmed",
+            "type": "boolean"
+          },
           "source": {
             "$ref": "#/components/schemas/RequirementSource",
             "default": "missing"
@@ -473,6 +611,44 @@
           }
         },
         "title": "RequirementValue[str]",
+        "type": "object"
+      },
+      "RequirementWorkflowAccepted": {
+        "additionalProperties": false,
+        "properties": {
+          "events_url": {
+            "title": "Events Url",
+            "type": "string"
+          },
+          "message": {
+            "$ref": "#/components/schemas/ConversationMessageRead"
+          },
+          "reused": {
+            "title": "Reused",
+            "type": "boolean"
+          },
+          "status_url": {
+            "title": "Status Url",
+            "type": "string"
+          },
+          "workflow_run_id": {
+            "format": "uuid",
+            "title": "Workflow Run Id",
+            "type": "string"
+          },
+          "workflow_status": {
+            "$ref": "#/components/schemas/WorkflowStatus"
+          }
+        },
+        "required": [
+          "message",
+          "workflow_run_id",
+          "workflow_status",
+          "reused",
+          "status_url",
+          "events_url"
+        ],
+        "title": "RequirementWorkflowAccepted",
         "type": "object"
       },
       "RouteBookCreationAccepted": {
@@ -512,6 +688,29 @@
           "events_url"
         ],
         "title": "RouteBookCreationAccepted",
+        "type": "object"
+      },
+      "RouteBookMessageCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "message_id": {
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Message Id",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "text"
+        ],
+        "title": "RouteBookMessageCreate",
         "type": "object"
       },
       "RouteBookRead": {
@@ -1214,6 +1413,134 @@
         ]
       }
     },
+    "/api/routebooks/{routebook_id}/messages": {
+      "get": {
+        "operationId": "get_routebook_messages_api_routebooks__routebook_id__messages_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Routebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ConversationMessageRead"
+                  },
+                  "title": "Response Get Routebook Messages Api Routebooks  Routebook Id  Messages Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Routebook Messages",
+        "tags": [
+          "messages"
+        ]
+      },
+      "post": {
+        "operationId": "create_routebook_message_api_routebooks__routebook_id__messages_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Routebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouteBookMessageCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequirementWorkflowAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Routebook Message",
+        "tags": [
+          "messages"
+        ]
+      }
+    },
     "/api/routebooks/{routebook_id}/versions/{version_id}": {
       "get": {
         "operationId": "get_version_api_routebooks__routebook_id__versions__version_id__get",
@@ -1366,6 +1693,79 @@
           }
         },
         "summary": "Workflow Events",
+        "tags": [
+          "workflows"
+        ]
+      }
+    },
+    "/api/workflow-runs/{run_id}/resume": {
+      "post": {
+        "operationId": "resume_requirement_workflow_api_workflow_runs__run_id__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequirementResumeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequirementWorkflowAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resume Requirement Workflow",
         "tags": [
           "workflows"
         ]

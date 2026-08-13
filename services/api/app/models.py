@@ -31,6 +31,9 @@ ROUTEBOOK_STATUSES = "'draft','planning','pending_confirmation','editable','bloc
 WORKFLOW_STATUSES = "'queued','running','interrupted','completed','failed','cancelled'"
 WORKFLOW_TYPES = "'create','edit','refresh','finalize'"
 PROPOSAL_STATUSES = "'pending','accepted','rejected','expired'"
+MESSAGE_ROLES = "'user','assistant','system'"
+MESSAGE_KINDS = "'requirement_input','requirement_clarification','status'"
+LLM_CALL_STATUSES = "'succeeded','failed'"
 
 
 class RouteBookModel(Base):
@@ -195,6 +198,65 @@ class IdempotencyRecordModel(Base):
     workflow_run_id: Mapped[UUID] = mapped_column(
         ForeignKey(f"{SCHEMA}.workflow_runs.id", ondelete="RESTRICT"), nullable=False
     )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class ConversationMessageModel(Base):
+    __tablename__ = "conversation_messages"
+    __table_args__ = (
+        UniqueConstraint("routebook_id", "client_message_id", name="message_client_id"),
+        CheckConstraint(f"role IN ({MESSAGE_ROLES})", name="role_valid"),
+        CheckConstraint(f"kind IN ({MESSAGE_KINDS})", name="kind_valid"),
+        Index("ix_conversation_messages_routebook_created", "routebook_id", "created_at"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    routebook_id: Mapped[UUID] = mapped_column(
+        ForeignKey(f"{SCHEMA}.routebooks.id", ondelete="RESTRICT"), nullable=False
+    )
+    workflow_run_id: Mapped[UUID] = mapped_column(
+        ForeignKey(f"{SCHEMA}.workflow_runs.id", ondelete="RESTRICT"), nullable=False
+    )
+    client_message_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    kind: Mapped[str] = mapped_column(String(48), nullable=False)
+    payload_jsonb: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class LlmCallRecordModel(Base):
+    __tablename__ = "llm_call_records"
+    __table_args__ = (
+        UniqueConstraint(
+            "workflow_run_id", "message_id", "attempt_count", name="llm_call_attempt"
+        ),
+        CheckConstraint(f"status IN ({LLM_CALL_STATUSES})", name="status_valid"),
+        Index("ix_llm_call_records_workflow", "workflow_run_id"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    workflow_run_id: Mapped[UUID] = mapped_column(
+        ForeignKey(f"{SCHEMA}.workflow_runs.id", ondelete="RESTRICT"), nullable=False
+    )
+    message_id: Mapped[UUID] = mapped_column(
+        ForeignKey(f"{SCHEMA}.conversation_messages.id", ondelete="RESTRICT"), nullable=False
+    )
+    prompt_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    model: Mapped[str] = mapped_column(String(120), nullable=False)
+    response_id: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    latency_ms: Mapped[int] = mapped_column(Integer, nullable=False)
+    input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    output_jsonb: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )

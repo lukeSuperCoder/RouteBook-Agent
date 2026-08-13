@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "threshold": 1.0,
+  "cases": [
+    {
+      "id": "complete-explicit-request",
+      "kind": "normal",
+      "today": "2026-08-13",
+      "message": "9月1日从上海自驾去南京玩三天，必须去中山陵和夫子庙。",
+      "patch": {
+        "origin": {"value": "上海", "source": "explicit", "confidence": 0.99},
+        "destination": {"value": "南京", "source": "explicit", "confidence": 0.99},
+        "start_date": {"value": "2026-09-01", "source": "explicit", "confidence": 0.99},
+        "days": {"value": 3, "source": "explicit", "confidence": 0.99},
+        "transport_mode": {"value": "driving", "source": "explicit", "confidence": 0.98},
+        "must_visit_place_texts": {
+          "value": ["中山陵", "夫子庙"],
+          "source": "explicit",
+          "confidence": 0.99
+        }
+      },
+      "expect": {"ready": true, "issue_codes": [], "conflict_reasons": []}
+    },
+    {
+      "id": "missing-three-blockers",
+      "kind": "missing",
+      "today": "2026-08-13",
+      "message": "想去南京玩三天。",
+      "patch": {
+        "destination": {"value": "南京", "source": "explicit", "confidence": 0.99},
+        "days": {"value": 3, "source": "explicit", "confidence": 0.99}
+      },
+      "expect": {
+        "ready": false,
+        "issue_codes": ["missing_origin", "missing_start_date", "missing_transport_mode"],
+        "conflict_reasons": []
+      }
+    },
+    {
+      "id": "past-date-and-invalid-days",
+      "kind": "invalid",
+      "today": "2026-08-13",
+      "message": "昨天从武汉自驾去长沙玩八天。",
+      "patch": {
+        "origin": {"value": "武汉", "source": "explicit", "confidence": 1.0},
+        "destination": {"value": "长沙", "source": "explicit", "confidence": 1.0},
+        "start_date": {"value": "2026-08-12", "source": "explicit", "confidence": 1.0},
+        "days": {"value": 8, "source": "explicit", "confidence": 1.0},
+        "transport_mode": {"value": "driving", "source": "explicit", "confidence": 1.0}
+      },
+      "expect": {
+        "ready": false,
+        "issue_codes": ["invalid_start_date", "invalid_days"],
+        "conflict_reasons": []
+      }
+    },
+    {
+      "id": "ambiguous-date",
+      "kind": "ambiguity",
+      "today": "2026-08-13",
+      "message": "从北京步行游西安四天，一号出发。",
+      "patch": {
+        "origin": {"value": "北京", "source": "explicit", "confidence": 1.0},
+        "destination": {"value": "西安", "source": "explicit", "confidence": 1.0},
+        "days": {"value": 4, "source": "explicit", "confidence": 1.0},
+        "transport_mode": {"value": "walking", "source": "explicit", "confidence": 1.0},
+        "ambiguities": [
+          {
+            "field": "start_date",
+            "candidates": ["2026-09-01", "2026-10-01"],
+            "reason": "用户只说了一号，月份不明确。"
+          }
+        ]
+      },
+      "expect": {
+        "ready": false,
+        "issue_codes": ["missing_start_date", "ambiguous_requirement"],
+        "conflict_reasons": ["ambiguous_input"]
+      }
+    },
+    {
+      "id": "reject-inferred-recommendation",
+      "kind": "pollution",
+      "today": "2026-08-13",
+      "message": "给我推荐几个北京景点。",
+      "patch": {
+        "optional_place_texts": {
+          "value": ["故宫博物院", "颐和园"],
+          "source": "inferred",
+          "confidence": 0.72
+        }
+      },
+      "expect": {
+        "ready": false,
+        "issue_codes": [
+          "missing_origin",
+          "missing_start_date",
+          "missing_days",
+          "missing_transport_mode",
+          "missing_target"
+        ],
+        "conflict_reasons": ["inferred_place_cannot_be_requirement"]
+      }
+    }
+  ]
+}

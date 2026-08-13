@@ -8,6 +8,12 @@ x-api-environment: &api-environment
   REDIS_URL: redis://redis:6379/1
   CELERY_BROKER_URL: redis://redis:6379/0
   API_CORS_ORIGINS: http://localhost:3000
+  ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
+  MODEL_ID: ${MODEL_ID:-claude-haiku-4-5}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  REQUIREMENT_PROMPT_VERSION: ${REQUIREMENT_PROMPT_VERSION:-requirement-extraction-v1}
+  REQUIREMENT_MAX_ATTEMPTS: ${REQUIREMENT_MAX_ATTEMPTS:-2}
+  REQUIREMENT_TIMEOUT_SECONDS: ${REQUIREMENT_TIMEOUT_SECONDS:-20}
 
 x-api-image: &api-image
   build:
@@ -23,7 +29,7 @@ services:
       POSTGRES_USER: routebook
       POSTGRES_PASSWORD: routebook
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       # PostgreSQL 18+ keeps major-version-specific data below this directory.
       - routebook-postgres:/var/lib/postgresql
@@ -36,7 +42,7 @@ services:
   redis:
     image: redis:8-alpine
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 3s

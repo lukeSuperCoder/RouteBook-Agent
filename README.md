@@ -6,7 +6,7 @@
 
 ## 当前阶段
 
-项目已完成一期第二阶段的离线开发与契约验证，当前可运行能力包括：
+项目已完成一期第三阶段“需求对话”的开发与离线验收，当前可运行能力包括：
 
 - FastAPI、Celery、PostgreSQL、Redis 与 LangGraph PostgreSQL Checkpointer；
 - 创建路书、异步执行空工作流、保存不可变版本 1；
@@ -17,12 +17,17 @@
 - 供应商超时、有限重试、错误映射、默认启用的 Redis 规范化缓存和 stale 降级；
 - POI 类别规范化、主体/入口/交通/服务/商户分类、硬过滤和可配置评分；
 - 强制执行自动采用质量门禁的统一地点事实服务；
-- 重名景区、直通车、车站、停车场、入口、游客中心和同名商户对抗评测。
+- 重名景区、直通车、车站、停车场、入口、游客中心和同名商户对抗评测；
+- 严格结构化 `RequirementPatch` 提取、字段来源/置信度与显式确认保护；
+- 每轮最多三个阻断问题、透明安全默认值与提取失败澄清降级；
+- LangGraph PostgreSQL Checkpointer 中断恢复、客户端消息幂等和对话记录；
+- Prompt/模型/响应/token/耗时追踪，以及需求快照的不可变版本提交；
+- 原生 Structured Output 优先、严格工具调用兜底的 Anthropic 兼容端点策略；
+- 阶段三需求回放评测、真实模型校准命令和 CI 门禁。
 
 后续一期范围包括：
 
-- 对话式旅行需求收集；
-- Agent 流程编排；
+- 推荐与地点确认；
 - 将已实现的地点、路线和天气事实层接入创建工作流；
 - 按天组织并验证结构化路书；
 - 地图与行程联动；
@@ -62,6 +67,13 @@ CLI 默认以 `INFO` 级别输出模型调用、LangGraph 节点切换、高德�
 
 ```bash
 uv run pytest
+uv run python -m scripts.evaluate_phase3_requirements
+```
+
+显式向已配置模型发送脱敏合成语句并执行质量校准：
+
+```bash
+uv run python -m scripts.evaluate_phase3_requirements --live
 ```
 
 真实供应商烟测与普通 CI 隔离，只有显式启用后才会读取服务端凭证并发送请求：
@@ -96,6 +108,26 @@ curl -X POST http://localhost:8000/api/routebooks \
   -H 'Idempotency-Key: routebook-demo-001' \
   -d '{"title":"武汉三日路书"}'
 ```
+
+提交第一轮需求消息：
+
+```bash
+curl -X POST http://localhost:8000/api/routebooks/<routebook_id>/messages \
+  -H 'Content-Type: application/json' \
+  -d '{"message_id":"message-demo-001","text":"9月1日从上海自驾去南京玩三天"}'
+```
+
+若 Workflow Run 进入 `waiting_for_clarification`，使用同一 Run 恢复：
+
+```bash
+curl -X POST http://localhost:8000/api/workflow-runs/<workflow_run_id>/resume \
+  -H 'Content-Type: application/json' \
+  -d '{"interrupt_kind":"requirement_clarification","message_id":"message-demo-002","text":"从上海出发，自驾"}'
+```
+
+每个 `message_id` 在同一路书内必须唯一；相同 ID 和内容可安全重试，不同内容返回
+`IDEMPOTENCY_CONFLICT`。模型输出、补丁合并和阻断判断相互分离，模型不会直接写入
+路线、天气、坐标或推荐地点事实。
 
 本地分别运行时，先复制 `.env.example` 并启动 PostgreSQL、Redis，然后执行：
 
