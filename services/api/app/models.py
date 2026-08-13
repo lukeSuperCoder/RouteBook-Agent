@@ -34,6 +34,7 @@ PROPOSAL_STATUSES = "'pending','accepted','rejected','expired'"
 MESSAGE_ROLES = "'user','assistant','system'"
 MESSAGE_KINDS = "'requirement_input','requirement_clarification','status'"
 LLM_CALL_STATUSES = "'succeeded','failed'"
+PLACE_PROPOSAL_STATUSES = "'proposed','accepted','rejected','replaced'"
 
 
 class RouteBookModel(Base):
@@ -257,6 +258,57 @@ class LlmCallRecordModel(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     output_jsonb: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class RecommendationBatchModel(Base):
+    __tablename__ = "recommendation_batches"
+    __table_args__ = (
+        Index("ix_recommendation_batches_routebook_created", "routebook_id", "created_at"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    routebook_id: Mapped[UUID] = mapped_column(
+        ForeignKey(f"{SCHEMA}.routebooks.id", ondelete="RESTRICT"), nullable=False
+    )
+    base_version_id: Mapped[UUID] = mapped_column(
+        ForeignKey(f"{SCHEMA}.routebook_versions.id", ondelete="RESTRICT"), nullable=False
+    )
+    strategy_jsonb: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    metrics_jsonb: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class PlaceProposalModel(Base):
+    __tablename__ = "place_proposals"
+    __table_args__ = (
+        UniqueConstraint("batch_id", "provider_place_id", name="proposal_batch_place"),
+        CheckConstraint(f"status IN ({PLACE_PROPOSAL_STATUSES})", name="status_valid"),
+        Index("ix_place_proposals_routebook_status", "routebook_id", "status"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    batch_id: Mapped[UUID] = mapped_column(
+        ForeignKey(f"{SCHEMA}.recommendation_batches.id", ondelete="RESTRICT"), nullable=False
+    )
+    routebook_id: Mapped[UUID] = mapped_column(
+        ForeignKey(f"{SCHEMA}.routebooks.id", ondelete="RESTRICT"), nullable=False
+    )
+    provider_place_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    candidate_jsonb: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    reason: Mapped[str] = mapped_column(String(500), nullable=False)
+    tradeoffs_jsonb: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    evidence_jsonb: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="proposed")
+    feedback_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    feedback_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )

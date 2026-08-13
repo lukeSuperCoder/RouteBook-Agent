@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Annotated, Any, Generic, Literal, TypeVar
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from .enums import (
     FactStatus,
@@ -222,6 +222,67 @@ class ProposalRead(ApiModel):
     status: ProposalStatus
     created_at: datetime
     resolved_at: datetime | None
+
+
+class RecommendationGenerateRequest(ApiModel):
+    limit: int = Field(default=8, ge=1, le=30)
+
+
+class RecommendationCandidateRead(ApiModel):
+    id: UUID
+    provider_place_id: str
+    name: str
+    type: str
+    address: str
+    district: str
+    recommendation_reason: str
+    transport_tradeoffs: list[str]
+    score: float = Field(ge=0, le=1)
+    score_evidence: list[str]
+    status: Literal["proposed", "accepted", "rejected", "replaced"]
+
+
+class RecommendationBatchRead(ApiModel):
+    id: UUID
+    routebook_id: UUID
+    base_version_id: UUID
+    strategy: dict[str, Any]
+    metrics: dict[str, Any]
+    candidates: list[RecommendationCandidateRead]
+    created_at: datetime
+
+
+class PlaceFeedbackRequest(ApiModel):
+    action: Literal["accept", "reject", "replace"]
+    reason: (
+        Literal["too_far", "not_interested", "already_visited", "too_crowded", "other"] | None
+    ) = None
+    note: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def require_rejection_reason(self) -> PlaceFeedbackRequest:
+        if self.action in {"reject", "replace"} and self.reason is None:
+            raise ValueError("reject and replace actions require a reason")
+        return self
+
+
+class RecommendationObservabilityRead(ApiModel):
+    proposed_count: int = Field(ge=0)
+    accepted_count: int = Field(ge=0)
+    rejected_count: int = Field(ge=0)
+    replaced_count: int = Field(ge=0)
+    auto_adopted_count: int = Field(ge=0)
+    recommendation_acceptance_rate: float = Field(ge=0, le=1)
+    user_correction_rate: float = Field(ge=0, le=1)
+    rejection_reason_distribution: dict[str, int]
+
+
+class ItineraryPlanningRead(ApiModel):
+    feasible: bool
+    version_id: UUID | None = None
+    repair_attempts: int = Field(default=0, ge=0, le=3)
+    degraded: bool = False
+    conflicts: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class ProgressValue(ApiModel):

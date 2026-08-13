@@ -29,6 +29,10 @@ from .errors import (
     ValidationAppError,
 )
 from .observability import configure_logging, request_id_context
+from .planning.graph import invoke_itinerary_planning_subgraph
+from .planning.models import PlanningPlace, PlanningResult
+from .planning.persistence import PlanningPersistenceService
+from .planning.service import ItineraryPlanningService
 from .presenters import (
     conversation_message_read,
     routebook_read,
@@ -36,8 +40,16 @@ from .presenters import (
     workflow_run_read,
 )
 from .progress import ProgressPublisher, build_progress_event, stream_progress
+from .providers.amap import AmapAdapter
+from .providers.models import Coordinate, RouteResult
+from .providers.qweather import QWeatherAdapter
+from .recommendations.models import PlaceFeedback, RecommendationResult
+from .recommendations.persistence import RecommendationPersistenceService, present_batch
+from .recommendations.service import RecommendationService
+from .recommendations.strategy import build_recommendation_strategy
 from .repositories import (
     ConversationMessageRepository,
+    RecommendationRepository,
     RouteBookRepository,
     VersionRepository,
     WorkflowRunRepository,
@@ -47,7 +59,13 @@ from .schemas import (
     CreateRouteBookRequest,
     ErrorResponse,
     HealthResponse,
+    ItineraryPlanningRead,
+    PlaceFeedbackRequest,
+    RecommendationBatchRead,
+    RecommendationGenerateRequest,
+    RecommendationObservabilityRead,
     RequirementResumeRequest,
+    RequirementSnapshot,
     RequirementWorkflowAccepted,
     RouteBookCreationAccepted,
     RouteBookMessageCreate,
@@ -68,6 +86,10 @@ log = logging.getLogger("routebook.api")
 IDEMPOTENCY_KEY_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
 WorkflowDispatcher = Callable[[UUID, str], None]
 RequirementWorkflowDispatcher = Callable[[UUID, UUID, str, bool], None]
+RecommendationRunner = Callable[
+    [RequirementSnapshot, int, list[PlaceFeedback]], RecommendationResult
+]
+ItineraryRunner = Callable[[RequirementSnapshot, list[PlanningPlace]], PlanningResult]
 
 
 @asynccontextmanager
@@ -80,9 +102,44 @@ def _dispatch_requirement(run_id: UUID, message_id: UUID, request_id: str, resum
     dispatch_requirement_workflow(run_id, message_id, request_id, resume=resume)
 
 
+def _run_recommendations(
+    requirements: RequirementSnapshot, limit: int, feedback: list[PlaceFeedback]
+) -> RecommendationResult:
+    rejected_reasons = [
+        item.reason.value
+        for item in feedback
+        if item.action in {"reject", "replace"} and item.reason is not None
+    ]
+    strategy = build_recommendation_strategy(requirements, rejected_reasons=rejected_reasons)
+    amap = AmapAdapter()
+    service = RecommendationService(lambda query, region: amap.search_places(query, region=region))
+    return service.recommend(strategy, limit=limit, feedback=feedback)
+
+
+def _run_itinerary(
+    requirements: RequirementSnapshot, places: list[PlanningPlace]
+) -> PlanningResult:
+    amap = AmapAdapter()
+    weather = QWeatherAdapter()
+
+    def route(origin: Coordinate, destination: Coordinate, mode: str) -> RouteResult:
+        if mode == "walking":
+            return amap.walking_route(origin, destination)
+        return amap.driving_route(origin, destination)
+
+    service = ItineraryPlanningService(
+        route_fetcher=route,
+        weather_fetcher=weather.daily_forecast,
+        warning_fetcher=weather.warnings,
+    )
+    return invoke_itinerary_planning_subgraph(service, requirements, places)
+
+
 def create_app(
     workflow_dispatcher: WorkflowDispatcher = dispatch_workflow,
     requirement_dispatcher: RequirementWorkflowDispatcher = _dispatch_requirement,
+    recommendation_runner: RecommendationRunner = _run_recommendations,
+    itinerary_runner: ItineraryRunner = _run_itinerary,
 ) -> FastAPI:
     app = FastAPI(
         title="RouteBook Agent API",
@@ -91,6 +148,8 @@ def create_app(
     )
     app.state.workflow_dispatcher = workflow_dispatcher
     app.state.requirement_dispatcher = requirement_dispatcher
+    app.state.recommendation_runner = recommendation_runner
+    app.state.itinerary_runner = itinerary_runner
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.api_cors_origins,
@@ -280,9 +339,7 @@ def create_app(
                     "requirement workflow dispatch failed run_id=%s",
                     result.workflow_run_id,
                 )
-                raise DependencyUnavailableError(
-                    details={"dependency": "celery_broker"}
-                ) from exc
+                raise DependencyUnavailableError(details={"dependency": "celery_broker"}) from exc
         return _requirement_accepted(result)
 
     @app.get(
@@ -382,10 +439,146 @@ def create_app(
                 )
             except Exception as exc:
                 log.exception("requirement resume dispatch failed run_id=%s", run_id)
-                raise DependencyUnavailableError(
-                    details={"dependency": "celery_broker"}
-                ) from exc
+                raise DependencyUnavailableError(details={"dependency": "celery_broker"}) from exc
         return _requirement_accepted(result)
+
+    @app.post(
+        "/api/routebooks/{routebook_id}/recommendations",
+        response_model=RecommendationBatchRead,
+        responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+        tags=["recommendations"],
+    )
+    def generate_recommendations(
+        routebook_id: UUID,
+        payload: RecommendationGenerateRequest,
+        session: Session = Depends(get_session),
+        _principal: RequestPrincipal = Depends(get_request_principal),
+    ) -> RecommendationBatchRead:
+        with session.begin():
+            base_version_id, snapshot = RecommendationPersistenceService.confirmed_requirements(
+                session, routebook_id
+            )
+            feedback = RecommendationPersistenceService.feedback_history(session, routebook_id)
+        result = app.state.recommendation_runner(snapshot.requirements, payload.limit, feedback)
+        with session.begin():
+            batch = RecommendationPersistenceService.save(
+                session,
+                routebook_id=routebook_id,
+                base_version_id=base_version_id,
+                result=result,
+            )
+        return present_batch(batch, RecommendationRepository(session).list_proposals(batch.id))
+
+    @app.get(
+        "/api/routebooks/{routebook_id}/recommendations/latest",
+        response_model=RecommendationBatchRead,
+        responses={404: {"model": ErrorResponse}},
+        tags=["recommendations"],
+    )
+    def get_latest_recommendations(
+        routebook_id: UUID,
+        session: Session = Depends(get_session),
+        _principal: RequestPrincipal = Depends(get_request_principal),
+    ) -> RecommendationBatchRead:
+        return RecommendationPersistenceService.latest(session, routebook_id)
+
+    @app.get(
+        "/api/routebooks/{routebook_id}/recommendations/metrics",
+        response_model=RecommendationObservabilityRead,
+        responses={404: {"model": ErrorResponse}},
+        tags=["recommendations"],
+    )
+    def get_recommendation_metrics(
+        routebook_id: UUID,
+        session: Session = Depends(get_session),
+        _principal: RequestPrincipal = Depends(get_request_principal),
+    ) -> RecommendationObservabilityRead:
+        return RecommendationPersistenceService.observability(session, routebook_id)
+
+    @app.post(
+        "/api/routebooks/{routebook_id}/recommendations/{proposal_id}/feedback",
+        response_model=RecommendationBatchRead,
+        responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+        tags=["recommendations"],
+    )
+    def submit_place_feedback(
+        routebook_id: UUID,
+        proposal_id: UUID,
+        payload: PlaceFeedbackRequest,
+        session: Session = Depends(get_session),
+        _principal: RequestPrincipal = Depends(get_request_principal),
+    ) -> RecommendationBatchRead:
+        with session.begin():
+            proposal = RecommendationPersistenceService.apply_feedback(
+                session,
+                routebook_id=routebook_id,
+                proposal_id=proposal_id,
+                feedback=PlaceFeedback(
+                    provider_place_id=str(proposal_id),
+                    action=payload.action,
+                    reason=payload.reason,
+                    note=payload.note,
+                ),
+            )
+        if payload.action == "replace":
+            with session.begin():
+                base_version_id, snapshot = RecommendationPersistenceService.confirmed_requirements(
+                    session, routebook_id
+                )
+                feedback = RecommendationPersistenceService.feedback_history(session, routebook_id)
+            result = app.state.recommendation_runner(snapshot.requirements, 8, feedback)
+            with session.begin():
+                replacement_batch = RecommendationPersistenceService.save(
+                    session,
+                    routebook_id=routebook_id,
+                    base_version_id=base_version_id,
+                    result=result,
+                )
+            return present_batch(
+                replacement_batch,
+                RecommendationRepository(session).list_proposals(replacement_batch.id),
+            )
+        repository = RecommendationRepository(session)
+        batch = repository.latest_batch(routebook_id)
+        if batch is None or proposal.batch_id != batch.id:
+            raise NotFoundError(details={"resource": "recommendation_batch"})
+        return present_batch(batch, repository.list_proposals(batch.id))
+
+    @app.post(
+        "/api/routebooks/{routebook_id}/itinerary",
+        response_model=ItineraryPlanningRead,
+        responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+        tags=["planning"],
+    )
+    def generate_itinerary(
+        routebook_id: UUID,
+        session: Session = Depends(get_session),
+        _principal: RequestPrincipal = Depends(get_request_principal),
+    ) -> ItineraryPlanningRead:
+        with session.begin():
+            base_version_id, snapshot, places = PlanningPersistenceService.load_input(
+                session, routebook_id
+            )
+        result = app.state.itinerary_runner(snapshot.requirements, places)
+        if not result.feasible or result.draft is None:
+            return ItineraryPlanningRead(
+                feasible=False,
+                conflicts=[item.model_dump(mode="json") for item in result.conflicts],
+            )
+        with session.begin():
+            version_id = PlanningPersistenceService.commit(
+                session,
+                routebook_id=routebook_id,
+                base_version_id=base_version_id,
+                base_snapshot=snapshot,
+                result=result,
+            )
+        return ItineraryPlanningRead(
+            feasible=True,
+            version_id=version_id,
+            repair_attempts=result.draft.repair_attempts,
+            degraded=result.draft.degraded,
+        )
 
     return app
 

@@ -6,7 +6,7 @@
 
 ## 当前阶段
 
-项目已完成一期第三阶段“需求对话”的开发与离线验收，当前可运行能力包括：
+项目已完成一期第五阶段“行程与路线规划”的开发与验收，当前可运行能力包括：
 
 - FastAPI、Celery、PostgreSQL、Redis 与 LangGraph PostgreSQL Checkpointer；
 - 创建路书、异步执行空工作流、保存不可变版本 1；
@@ -24,12 +24,22 @@
 - Prompt/模型/响应/token/耗时追踪，以及需求快照的不可变版本提交；
 - 原生 Structured Output 优先、严格工具调用兜底的 Anthropic 兼容端点策略；
 - 阶段三需求回放评测、真实模型校准命令和 CI 门禁。
+- 从已确认需求生成推荐策略，执行多查询真实 POI 召回；
+- POI 硬过滤、偏好评分、供应商 ID 去重和类别/行政区多样性选择；
+- 带理由、交通取舍、来源查询和评分证据的持久化地点候选；
+- 高置信自动采用、候选消歧、泛指偏好选择和无结果澄清子图；
+- 推荐接受、拒绝、即时替换和基于拒绝历史的后续重排；
+- 推荐接受率、用户更正率和拒绝原因分布 API。
+- 轻松、适中、紧凑三档每日地点、活动与交通容量模板；
+- 按行政区分组、必去优先、最近邻和有限 2-opt 的可解释分日编排；
+- 对最终相邻地点调用高德路径适配器，保存正式距离、耗时和验证状态；
+- 必去、排除、容量、跨区、远郊混排和类型重复的结构化可行性检查；
+- 最多三轮的有界修复，只移除低优先级推荐项，不静默删除必去地点；
+- 并行路线、每日天气和灾害预警查询，以及明确的部分失败降级状态；
+- 将分日行程、路线段、天气和预警提交为新的不可变路书版本。
 
 后续一期范围包括：
 
-- 推荐与地点确认；
-- 将已实现的地点、路线和天气事实层接入创建工作流；
-- 按天组织并验证结构化路书；
 - 地图与行程联动；
 - 局部修改、确认、版本保存和撤销。
 
@@ -128,6 +138,31 @@ curl -X POST http://localhost:8000/api/workflow-runs/<workflow_run_id>/resume \
 每个 `message_id` 在同一路书内必须唯一；相同 ID 和内容可安全重试，不同内容返回
 `IDEMPOTENCY_CONFLICT`。模型输出、补丁合并和阻断判断相互分离，模型不会直接写入
 路线、天气、坐标或推荐地点事实。
+
+需求确认后生成推荐候选：
+
+```bash
+curl -X POST http://localhost:8000/api/routebooks/<routebook_id>/recommendations \
+  -H 'Content-Type: application/json' \
+  -d '{"limit":8}'
+```
+
+候选返回真实 POI 名称、类型、地址、行政区、推荐理由、交通取舍和评分证据。接受、
+拒绝或替换候选使用
+`POST /api/routebooks/<routebook_id>/recommendations/<proposal_id>/feedback`；拒绝和替换
+必须携带标准原因。`too_far` 会关闭本路书后续策略的远郊接受，并且被拒绝的供应商
+POI ID 不会再次进入候选。指标可从
+`GET /api/routebooks/<routebook_id>/recommendations/metrics` 查询。
+
+至少接受三个真实地点后生成分日行程：
+
+```bash
+curl -X POST http://localhost:8000/api/routebooks/<routebook_id>/itinerary
+```
+
+成功响应包含新版本 ID、修复轮数和降级标记。仍有未解析必去地点、必去约束与每日
+容量不可同时满足，或三轮修复后仍不可行时，响应返回结构化冲突且不提交版本。路线
+或天气部分失败时保留有效地点安排，并分别标记未验证路线或不可用天气。
 
 本地分别运行时，先复制 `.env.example` 并启动 PostgreSQL、Redis，然后执行：
 

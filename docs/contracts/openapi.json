@@ -224,6 +224,101 @@
         "title": "ItineraryDaySnapshot",
         "type": "object"
       },
+      "ItineraryPlanningRead": {
+        "additionalProperties": false,
+        "properties": {
+          "conflicts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Conflicts",
+            "type": "array"
+          },
+          "degraded": {
+            "default": false,
+            "title": "Degraded",
+            "type": "boolean"
+          },
+          "feasible": {
+            "title": "Feasible",
+            "type": "boolean"
+          },
+          "repair_attempts": {
+            "default": 0,
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Repair Attempts",
+            "type": "integer"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          }
+        },
+        "required": [
+          "feasible"
+        ],
+        "title": "ItineraryPlanningRead",
+        "type": "object"
+      },
+      "PlaceFeedbackRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "accept",
+              "reject",
+              "replace"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "too_far",
+                  "not_interested",
+                  "already_visited",
+                  "too_crowded",
+                  "other"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "title": "PlaceFeedbackRequest",
+        "type": "object"
+      },
       "PlaceSnapshot": {
         "additionalProperties": false,
         "properties": {
@@ -296,6 +391,213 @@
           "status"
         ],
         "title": "PlaceSnapshot",
+        "type": "object"
+      },
+      "RecommendationBatchRead": {
+        "additionalProperties": false,
+        "properties": {
+          "base_version_id": {
+            "format": "uuid",
+            "title": "Base Version Id",
+            "type": "string"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/RecommendationCandidateRead"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "metrics": {
+            "additionalProperties": true,
+            "title": "Metrics",
+            "type": "object"
+          },
+          "routebook_id": {
+            "format": "uuid",
+            "title": "Routebook Id",
+            "type": "string"
+          },
+          "strategy": {
+            "additionalProperties": true,
+            "title": "Strategy",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "routebook_id",
+          "base_version_id",
+          "strategy",
+          "metrics",
+          "candidates",
+          "created_at"
+        ],
+        "title": "RecommendationBatchRead",
+        "type": "object"
+      },
+      "RecommendationCandidateRead": {
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "district": {
+            "title": "District",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "provider_place_id": {
+            "title": "Provider Place Id",
+            "type": "string"
+          },
+          "recommendation_reason": {
+            "title": "Recommendation Reason",
+            "type": "string"
+          },
+          "score": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "type": "number"
+          },
+          "score_evidence": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Score Evidence",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "accepted",
+              "rejected",
+              "replaced"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "transport_tradeoffs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Transport Tradeoffs",
+            "type": "array"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider_place_id",
+          "name",
+          "type",
+          "address",
+          "district",
+          "recommendation_reason",
+          "transport_tradeoffs",
+          "score",
+          "score_evidence",
+          "status"
+        ],
+        "title": "RecommendationCandidateRead",
+        "type": "object"
+      },
+      "RecommendationGenerateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "default": 8,
+            "maximum": 30.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "title": "RecommendationGenerateRequest",
+        "type": "object"
+      },
+      "RecommendationObservabilityRead": {
+        "additionalProperties": false,
+        "properties": {
+          "accepted_count": {
+            "minimum": 0.0,
+            "title": "Accepted Count",
+            "type": "integer"
+          },
+          "auto_adopted_count": {
+            "minimum": 0.0,
+            "title": "Auto Adopted Count",
+            "type": "integer"
+          },
+          "proposed_count": {
+            "minimum": 0.0,
+            "title": "Proposed Count",
+            "type": "integer"
+          },
+          "recommendation_acceptance_rate": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Recommendation Acceptance Rate",
+            "type": "number"
+          },
+          "rejected_count": {
+            "minimum": 0.0,
+            "title": "Rejected Count",
+            "type": "integer"
+          },
+          "rejection_reason_distribution": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Rejection Reason Distribution",
+            "type": "object"
+          },
+          "replaced_count": {
+            "minimum": 0.0,
+            "title": "Replaced Count",
+            "type": "integer"
+          },
+          "user_correction_rate": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "User Correction Rate",
+            "type": "number"
+          }
+        },
+        "required": [
+          "proposed_count",
+          "accepted_count",
+          "rejected_count",
+          "replaced_count",
+          "auto_adopted_count",
+          "recommendation_acceptance_rate",
+          "user_correction_rate",
+          "rejection_reason_distribution"
+        ],
+        "title": "RecommendationObservabilityRead",
         "type": "object"
       },
       "RequirementResumeRequest": {
@@ -1413,6 +1715,69 @@
         ]
       }
     },
+    "/api/routebooks/{routebook_id}/itinerary": {
+      "post": {
+        "operationId": "generate_itinerary_api_routebooks__routebook_id__itinerary_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Routebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItineraryPlanningRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Generate Itinerary",
+        "tags": [
+          "planning"
+        ]
+      }
+    },
     "/api/routebooks/{routebook_id}/messages": {
       "get": {
         "operationId": "get_routebook_messages_api_routebooks__routebook_id__messages_get",
@@ -1538,6 +1903,268 @@
         "summary": "Create Routebook Message",
         "tags": [
           "messages"
+        ]
+      }
+    },
+    "/api/routebooks/{routebook_id}/recommendations": {
+      "post": {
+        "operationId": "generate_recommendations_api_routebooks__routebook_id__recommendations_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Routebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecommendationGenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationBatchRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Generate Recommendations",
+        "tags": [
+          "recommendations"
+        ]
+      }
+    },
+    "/api/routebooks/{routebook_id}/recommendations/latest": {
+      "get": {
+        "operationId": "get_latest_recommendations_api_routebooks__routebook_id__recommendations_latest_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Routebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationBatchRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Latest Recommendations",
+        "tags": [
+          "recommendations"
+        ]
+      }
+    },
+    "/api/routebooks/{routebook_id}/recommendations/metrics": {
+      "get": {
+        "operationId": "get_recommendation_metrics_api_routebooks__routebook_id__recommendations_metrics_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Routebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationObservabilityRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Recommendation Metrics",
+        "tags": [
+          "recommendations"
+        ]
+      }
+    },
+    "/api/routebooks/{routebook_id}/recommendations/{proposal_id}/feedback": {
+      "post": {
+        "operationId": "submit_place_feedback_api_routebooks__routebook_id__recommendations__proposal_id__feedback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Routebook Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaceFeedbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationBatchRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Place Feedback",
+        "tags": [
+          "recommendations"
         ]
       }
     },

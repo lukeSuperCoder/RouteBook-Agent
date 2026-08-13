@@ -10,6 +10,8 @@ from .models import (
     ConversationMessageModel,
     IdempotencyRecordModel,
     LlmCallRecordModel,
+    PlaceProposalModel,
+    RecommendationBatchModel,
     RouteBookModel,
     RouteBookVersionModel,
     WorkflowRunModel,
@@ -148,4 +150,70 @@ class LlmCallRecordRepository:
                 )
             )
             is not None
+        )
+
+
+class RecommendationRepository:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def add_batch(self, batch: RecommendationBatchModel) -> None:
+        self.session.add(batch)
+
+    def add_proposal(self, proposal: PlaceProposalModel) -> None:
+        self.session.add(proposal)
+
+    def latest_batch(self, routebook_id: UUID) -> RecommendationBatchModel | None:
+        return self.session.scalar(
+            select(RecommendationBatchModel)
+            .where(RecommendationBatchModel.routebook_id == routebook_id)
+            .order_by(
+                RecommendationBatchModel.created_at.desc(),
+                RecommendationBatchModel.id.desc(),
+            )
+            .limit(1)
+        )
+
+    def list_proposals(self, batch_id: UUID) -> list[PlaceProposalModel]:
+        return list(
+            self.session.scalars(
+                select(PlaceProposalModel)
+                .where(PlaceProposalModel.batch_id == batch_id)
+                .order_by(PlaceProposalModel.created_at, PlaceProposalModel.id)
+            )
+        )
+
+    def get_proposal(
+        self, routebook_id: UUID, proposal_id: UUID, *, for_update: bool = False
+    ) -> PlaceProposalModel | None:
+        statement = select(PlaceProposalModel).where(
+            PlaceProposalModel.id == proposal_id,
+            PlaceProposalModel.routebook_id == routebook_id,
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return self.session.scalar(statement)
+
+    def rejected_reasons(self, routebook_id: UUID) -> list[str]:
+        return [
+            reason
+            for reason in self.session.scalars(
+                select(PlaceProposalModel.feedback_reason)
+                .where(
+                    PlaceProposalModel.routebook_id == routebook_id,
+                    PlaceProposalModel.status.in_(("rejected", "replaced")),
+                    PlaceProposalModel.feedback_reason.is_not(None),
+                )
+                .distinct()
+            )
+            if reason is not None
+        ]
+
+    def list_for_routebook(self, routebook_id: UUID) -> list[PlaceProposalModel]:
+        return list(
+            self.session.scalars(
+                select(PlaceProposalModel).where(
+                    PlaceProposalModel.routebook_id == routebook_id
+                )
+            )
         )

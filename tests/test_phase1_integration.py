@@ -16,7 +16,14 @@ if os.getenv("RUN_INTEGRATION_TESTS") != "1":
 
 from services.api.app.checkpoint_setup import main as setup_checkpointer
 from services.api.app.db import SessionFactory
-from services.api.app.enums import ChangeType, WorkflowRunType, WorkflowStage, WorkflowStatus
+from services.api.app.enums import (
+    ChangeType,
+    FactStatus,
+    RequirementSource,
+    WorkflowRunType,
+    WorkflowStage,
+    WorkflowStatus,
+)
 from services.api.app.errors import VersionConflictError
 from services.api.app.main import create_app
 from services.api.app.models import (
@@ -26,13 +33,35 @@ from services.api.app.models import (
     RouteBookVersionModel,
     WorkflowRunModel,
 )
+from services.api.app.planning.persistence import PlanningPersistenceService
+from services.api.app.planning.service import ItineraryPlanningService
+from services.api.app.providers.models import (
+    Coordinate,
+    FactCollection,
+    NormalizedPlaceCategory,
+    PlaceCandidate,
+    PlaceSemanticType,
+    RouteResult,
+    WeatherWarning,
+)
+from services.api.app.recommendations.models import (
+    GeographicScope,
+    PlaceFeedback,
+    PlaceProposal,
+    RecommendationEvidence,
+    RecommendationMetrics,
+    RecommendationResult,
+    RecommendationStrategy,
+)
+from services.api.app.recommendations.persistence import RecommendationPersistenceService
+from services.api.app.repositories import RecommendationRepository
 from services.api.app.requirements import (
     ExtractionResult,
     ExtractionTrace,
     RequirementPatch,
     RequirementPatchValue,
 )
-from services.api.app.schemas import RouteBookSnapshotV1
+from services.api.app.schemas import RequirementValue, RouteBookSnapshotV1
 from services.api.app.services import RequirementMessageService, VersionService, WorkflowService
 from services.api.app.worker import execute_foundation_workflow, execute_requirement_workflow
 
@@ -190,6 +219,248 @@ def test_requirement_message_api_is_idempotent_and_dispatches_safe_retry() -> No
     assert dispatched[0] == dispatched[1]
     assert history.status_code == 200
     assert len(history.json()) == 1
+
+
+def test_recommendation_api_persists_candidate_and_feedback() -> None:
+    initial_run_id = _create_routebook_and_run()
+    setup_checkpointer()
+    execute_foundation_workflow.run(str(initial_run_id), "integration-request")
+    with SessionFactory.begin() as session:
+        run = session.get(WorkflowRunModel, initial_run_id)
+        assert run is not None and run.result_version_id is not None
+        routebook_id = run.routebook_id
+        version = session.get(RouteBookVersionModel, run.result_version_id)
+        assert version is not None
+        snapshot = RouteBookSnapshotV1.model_validate(version.snapshot_jsonb)
+        snapshot = snapshot.model_copy(
+            update={
+                "requirements": snapshot.requirements.model_copy(
+                    update={
+                        "destination": RequirementValue(
+                            value="南京",
+                            source=RequirementSource.EXPLICIT,
+                            confidence=1,
+                            confirmed=True,
+                        )
+                    }
+                )
+            }
+        )
+        version.snapshot_jsonb = snapshot.model_dump(mode="json")
+
+    place = PlaceCandidate(
+        provider_place_id="B001",
+        name="南京博物院",
+        address="南京市玄武区中山东路321号",
+        city="南京市",
+        district="玄武区",
+        adcode="320102",
+        coordinate=Coordinate(longitude=118.8, latitude=32.04),
+        category_raw="风景名胜;博物馆",
+        category_normalized=NormalizedPlaceCategory.MUSEUM,
+        semantic_type=PlaceSemanticType.ATTRACTION,
+        fetched_at=datetime.now(UTC),
+    )
+    result = RecommendationResult(
+        strategy=RecommendationStrategy(
+            target_categories=["museum"],
+            geographic_scope=GeographicScope(region="南京"),
+            query_terms=["南京博物馆"],
+        ),
+        proposals=[
+            PlaceProposal(
+                candidate=place,
+                reason="历史主题匹配",
+                tradeoffs=["位于玄武区"],
+                evidence=RecommendationEvidence(
+                    query_terms=["南京博物馆"],
+                    quality_score=0.9,
+                    preference_score=1,
+                    diversity_score=1,
+                    final_score=0.94,
+                    signals=["target_category"],
+                ),
+            )
+        ],
+        metrics=RecommendationMetrics(
+            query_count=1,
+            recalled_count=1,
+            hard_filtered_count=0,
+            deduplicated_count=1,
+            selected_count=1,
+        ),
+    )
+    app = create_app(
+        lambda _run_id, _request_id: None,
+        lambda _run_id, _message_id, _request_id, _resume: None,
+        lambda _requirements, _limit, _feedback: result,
+    )
+
+    with TestClient(app) as client:
+        generated = client.post(
+            f"/api/routebooks/{routebook_id}/recommendations", json={"limit": 5}
+        )
+        proposal_id = generated.json()["candidates"][0]["id"]
+        rejected = client.post(
+            f"/api/routebooks/{routebook_id}/recommendations/{proposal_id}/feedback",
+            json={"action": "reject", "reason": "too_far"},
+        )
+        metrics = client.get(f"/api/routebooks/{routebook_id}/recommendations/metrics")
+
+    assert generated.status_code == 200
+    assert generated.json()["candidates"][0]["name"] == "南京博物院"
+    assert generated.json()["candidates"][0]["status"] == "proposed"
+    assert rejected.status_code == 200
+    assert rejected.json()["candidates"][0]["status"] == "rejected"
+    assert metrics.status_code == 200
+    assert metrics.json()["user_correction_rate"] == 1
+    assert metrics.json()["rejection_reason_distribution"] == {"too_far": 1}
+
+
+def test_planning_persists_routebook_snapshot_from_accepted_places() -> None:
+    initial_run_id = _create_routebook_and_run()
+    setup_checkpointer()
+    execute_foundation_workflow.run(str(initial_run_id), "planning-integration")
+    with SessionFactory.begin() as session:
+        run = session.get(WorkflowRunModel, initial_run_id)
+        assert run is not None and run.result_version_id is not None
+        routebook_id = run.routebook_id
+        version = session.get(RouteBookVersionModel, run.result_version_id)
+        assert version is not None
+        snapshot = RouteBookSnapshotV1.model_validate(version.snapshot_jsonb)
+        explicit = RequirementSource.EXPLICIT
+        snapshot = snapshot.model_copy(
+            update={
+                "requirements": snapshot.requirements.model_copy(
+                    update={
+                        "destination": RequirementValue(
+                            value="南京", source=explicit, confidence=1, confirmed=True
+                        ),
+                        "start_date": RequirementValue(
+                            value=date(2026, 10, 1),
+                            source=explicit,
+                            confidence=1,
+                            confirmed=True,
+                        ),
+                        "days": RequirementValue(
+                            value=1, source=explicit, confidence=1, confirmed=True
+                        ),
+                        "transport_mode": RequirementValue(
+                            value="driving", source=explicit, confidence=1, confirmed=True
+                        ),
+                        "intensity": RequirementValue(
+                            value="compact", source=explicit, confidence=1, confirmed=True
+                        ),
+                    }
+                )
+            }
+        )
+        version.snapshot_jsonb = snapshot.model_dump(mode="json")
+        candidates = [
+            PlaceCandidate(
+                provider_place_id=f"plan-{index}",
+                name=f"规划地点{index}",
+                address="南京市玄武区",
+                city="南京市",
+                district="玄武区",
+                adcode="320102",
+                coordinate=Coordinate(longitude=118.8 + index * 0.01, latitude=32.04),
+                category_raw="风景名胜",
+                category_normalized=NormalizedPlaceCategory.ATTRACTION,
+                semantic_type=PlaceSemanticType.ATTRACTION,
+                fetched_at=datetime.now(UTC),
+            )
+            for index in range(3)
+        ]
+        recommendation = RecommendationResult(
+            strategy=RecommendationStrategy(
+                target_categories=["attraction"],
+                geographic_scope=GeographicScope(region="南京"),
+                query_terms=["南京景点"],
+            ),
+            proposals=[
+                PlaceProposal(
+                    candidate=item,
+                    reason="已确认候选",
+                    evidence=RecommendationEvidence(
+                        query_terms=["南京景点"],
+                        quality_score=0.9,
+                        preference_score=0.9,
+                        diversity_score=1,
+                        final_score=0.91,
+                    ),
+                )
+                for item in candidates
+            ],
+            metrics=RecommendationMetrics(
+                query_count=1,
+                recalled_count=3,
+                hard_filtered_count=0,
+                deduplicated_count=3,
+                selected_count=3,
+            ),
+        )
+        batch = RecommendationPersistenceService.save(
+            session,
+            routebook_id=routebook_id,
+            base_version_id=version.id,
+            result=recommendation,
+        )
+        proposals = RecommendationRepository(session).list_proposals(batch.id)
+        for proposal in proposals:
+            RecommendationPersistenceService.apply_feedback(
+                session,
+                routebook_id=routebook_id,
+                proposal_id=proposal.id,
+                feedback=PlaceFeedback(
+                    provider_place_id=proposal.provider_place_id, action="accept"
+                ),
+            )
+
+    now = datetime.now(UTC)
+
+    def route(origin: Coordinate, destination: Coordinate, _mode: str) -> RouteResult:
+        return RouteResult(
+            mode="driving",
+            origin=origin,
+            destination=destination,
+            distance_meters=2_000,
+            duration_seconds=600,
+            fetched_at=now,
+        )
+
+    planner = ItineraryPlanningService(
+        route_fetcher=route,
+        weather_fetcher=lambda _location: FactCollection(
+            status=FactStatus.UNAVAILABLE, items=[]
+        ),
+        warning_fetcher=lambda _location: FactCollection[WeatherWarning](
+            status=FactStatus.VERIFIED, items=[]
+        ),
+    )
+    with SessionFactory.begin() as session:
+        base_id, base_snapshot, places = PlanningPersistenceService.load_input(
+            session, routebook_id
+        )
+    result = planner.plan(base_snapshot.requirements, places)
+    with SessionFactory.begin() as session:
+        version_id = PlanningPersistenceService.commit(
+            session,
+            routebook_id=routebook_id,
+            base_version_id=base_id,
+            base_snapshot=base_snapshot,
+            result=result,
+        )
+    with SessionFactory() as session:
+        planned = session.get(RouteBookVersionModel, version_id)
+        assert planned is not None
+        final_snapshot = RouteBookSnapshotV1.model_validate(planned.snapshot_jsonb)
+        assert len(final_snapshot.days_plan) == 1
+        assert len(final_snapshot.places) == 3
+        assert len(final_snapshot.route_segments) == 2
+        assert all(
+            item.status == FactStatus.VERIFIED for item in final_snapshot.route_segments
+        )
 
 
 def test_requirement_resume_requires_interrupted_run_and_is_idempotent() -> None:
