@@ -1,5 +1,6 @@
 from uuid import uuid4
 
+from services.api.app.config import Settings
 from services.api.app.enums import WorkflowStage, WorkflowStatus
 from services.api.app.observability import redact
 from services.api.app.progress import build_progress_event
@@ -18,6 +19,15 @@ def test_empty_snapshot_is_canonical_and_versioned() -> None:
     assert snapshot.weather == []
 
 
+def test_cors_origins_accept_compose_comma_separated_environment(monkeypatch) -> None:
+    monkeypatch.setenv("API_CORS_ORIGINS", "http://localhost:3000,https://example.test")
+    settings = Settings(_env_file=None)
+    assert settings.api_cors_origins == [
+        "http://localhost:3000",
+        "https://example.test",
+    ]
+
+
 def test_request_hash_is_stable_across_key_order() -> None:
     assert canonical_request_hash({"title": "武汉", "extra": 1}) == canonical_request_hash(
         {"extra": 1, "title": "武汉"}
@@ -25,9 +35,16 @@ def test_request_hash_is_stable_across_key_order() -> None:
 
 
 def test_sensitive_logging_fields_are_redacted() -> None:
-    assert redact({"api_key": "secret", "nested": {"authorization": "Bearer x"}}) == {
+    assert redact(
+        {
+            "api_key": "secret",
+            "nested": {"authorization": "Bearer x"},
+            "url": "https://example.test/path?key=secret-value&output=json",
+        }
+    ) == {
         "api_key": "[REDACTED]",
         "nested": {"authorization": "[REDACTED]"},
+        "url": "https://example.test/path?key=[REDACTED]&output=json",
     }
 
 

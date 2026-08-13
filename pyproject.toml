@@ -32,6 +32,7 @@ testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
     "integration: requires PostgreSQL and Redis",
+    "provider_live: requires real Amap and QWeather credentials",
 ]
 
 [tool.ruff]

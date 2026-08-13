@@ -1,0 +1,13 @@
+{
+  "status": "1",
+  "infocode": "10000",
+  "count": "6",
+  "pois": [
+    {"id":"A1","name":"八达岭长城","type":"风景名胜;世界遗产;国家级景点","address":"八达岭镇","pname":"北京市","cityname":"北京市","adname":"延庆区","adcode":"110119","location":"116.016802,40.356188"},
+    {"id":"A2","name":"八达岭长城直通车","type":"生活服务;旅行社;票务服务","address":"前门集合点","pname":"北京市","cityname":"北京市","adname":"东城区","adcode":"110101","location":"116.397000,39.900000"},
+    {"id":"A3","name":"八达岭长城站","type":"交通设施服务;火车站","address":"八达岭镇","pname":"北京市","cityname":"北京市","adname":"延庆区","adcode":"110119","location":"116.000000,40.350000"},
+    {"id":"A4","name":"八达岭长城停车场","type":"交通设施服务;停车场","address":"景区入口","pname":"北京市","cityname":"北京市","adname":"延庆区","adcode":"110119","location":"116.017000,40.355000"},
+    {"id":"A5","name":"八达岭长城北门","type":"风景名胜;国家级景点","address":"景区北侧","pname":"北京市","cityname":"北京市","adname":"延庆区","adcode":"110119","location":"116.018000,40.358000"},
+    {"id":"A6","name":"八达岭长城游客中心","type":"生活服务;服务中心","address":"景区入口","pname":"北京市","cityname":"北京市","adname":"延庆区","adcode":"110119","location":"116.015000,40.355000"}
+  ]
+}

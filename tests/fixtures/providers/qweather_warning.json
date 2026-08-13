@@ -1,0 +1,7 @@
+{
+  "code":"200",
+  "updateTime":"2026-08-12T14:33+08:00",
+  "warning":[
+    {"id":"warn-1","sender":"武汉市气象台","title":"高温黄色预警","severity":"Minor","startTime":"2026-08-12T09:00+08:00","endTime":"2026-08-12T20:00+08:00"}
+  ]
+}

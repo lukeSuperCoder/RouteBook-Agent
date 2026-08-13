@@ -6,20 +6,25 @@
 
 ## 当前阶段
 
-项目已建立一期第一阶段正式工程基线，当前可运行能力包括：
+项目已完成一期第二阶段的离线开发与契约验证，当前可运行能力包括：
 
 - FastAPI、Celery、PostgreSQL、Redis 与 LangGraph PostgreSQL Checkpointer；
 - 创建路书、异步执行空工作流、保存不可变版本 1；
 - 幂等创建、Worker 重投保护、乐观版本冲突与 SSE 进度；
-- Next.js 工程状态页和 API/OpenAPI/JSON Schema 合同。
+- Next.js 工程状态页和 API/OpenAPI/JSON Schema 合同；
+- 高德 POI、地理编码、V5 驾车和步行路线适配器；
+- 和风天气三日、24 小时和灾害预警适配器；
+- 供应商超时、有限重试、错误映射、默认启用的 Redis 规范化缓存和 stale 降级；
+- POI 类别规范化、主体/入口/交通/服务/商户分类、硬过滤和可配置评分；
+- 强制执行自动采用质量门禁的统一地点事实服务；
+- 重名景区、直通车、车站、停车场、入口、游客中心和同名商户对抗评测。
 
 后续一期范围包括：
 
 - 对话式旅行需求收集；
 - Agent 流程编排；
-- 高德地点检索与路线规划；
-- 和风天气预报与灾害预警；
-- 按天组织的结构化路书；
+- 将已实现的地点、路线和天气事实层接入创建工作流；
+- 按天组织并验证结构化路书；
 - 地图与行程联动；
 - 局部修改、确认、版本保存和撤销。
 
@@ -59,9 +64,19 @@ CLI 默认以 `INFO` 级别输出模型调用、LangGraph 节点切换、高德�
 uv run pytest
 ```
 
+真实供应商烟测与普通 CI 隔离，只有显式启用后才会读取服务端凭证并发送请求：
+
+```bash
+RUN_PROVIDER_LIVE_TESTS=1 uv run pytest -m provider_live
+```
+
+普通 CI 和本地默认测试只使用 `tests/fixtures/providers/` 中的脱敏响应，不访问外网。
+仓库的 `Provider Live Smoke Tests` GitHub Actions 工作流只能手动触发，并从受保护的
+`provider-live` Environment 读取凭证；它可分别运行高德、和风或全部真实烟测。
+
 ## 正式工程基线
 
-启动完整第一阶段服务：
+启动正式工程服务：
 
 ```bash
 docker compose up --build

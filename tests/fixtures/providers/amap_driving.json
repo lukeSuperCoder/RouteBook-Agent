@@ -1,0 +1,6 @@
+{
+  "status":"1",
+  "infocode":"10000",
+  "count":"1",
+  "route":{"origin":"114.302467,30.544649","destination":"114.289000,30.561000","paths":[{"distance":"9484","cost":{"duration":"1224","tolls":"0","traffic_lights":"15"}}]}
+}

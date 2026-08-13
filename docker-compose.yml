@@ -25,7 +25,8 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - routebook-postgres:/var/lib/postgresql/data
+      # PostgreSQL 18+ keeps major-version-specific data below this directory.
+      - routebook-postgres:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U routebook -d routebook"]
       interval: 3s

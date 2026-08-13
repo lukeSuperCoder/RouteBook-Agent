@@ -47,3 +47,55 @@ class DependencyUnavailableError(AppError):
     code = "DEPENDENCY_UNAVAILABLE"
     status_code = 503
     public_message = "依赖服务暂时不可用，请稍后重试。"
+
+
+class ProviderError(AppError):
+    code = "PROVIDER_ERROR"
+    status_code = 502
+    public_message = "外部数据服务返回错误。"
+
+
+class ProviderUnavailableError(ProviderError):
+    code = "PROVIDER_UNAVAILABLE"
+    status_code = 503
+    public_message = "外部数据服务暂时不可用。"
+
+
+class ProviderRateLimitedError(ProviderError):
+    code = "PROVIDER_RATE_LIMITED"
+    status_code = 503
+    public_message = "外部数据服务请求受限，请稍后重试。"
+
+
+class ProviderAuthFailedError(ProviderError):
+    code = "PROVIDER_AUTH_FAILED"
+    public_message = "外部数据服务认证失败。"
+
+
+class ProviderBadResponseError(ProviderError):
+    code = "PROVIDER_BAD_RESPONSE"
+    public_message = "外部数据服务响应格式异常。"
+
+
+class ProviderDataUnavailableError(ProviderError):
+    code = "PROVIDER_DATA_UNAVAILABLE"
+    status_code = 404
+    public_message = "外部数据服务暂未提供所请求的数据。"
+
+
+class PlaceNotFoundError(AppError):
+    code = "PLACE_NOT_FOUND"
+    status_code = 404
+    public_message = "未找到匹配的地点。"
+
+
+class PlaceAmbiguousError(AppError):
+    code = "PLACE_AMBIGUOUS"
+    status_code = 409
+    public_message = "存在多个合理地点候选，请先确认具体地点。"
+
+
+class RouteNotFoundError(AppError):
+    code = "ROUTE_NOT_FOUND"
+    status_code = 404
+    public_message = "未找到可用路线。"

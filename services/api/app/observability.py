@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextvars
 import json
 import logging
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -15,7 +16,16 @@ workflow_run_id_context: contextvars.ContextVar[str] = contextvars.ContextVar(
 )
 version_id_context: contextvars.ContextVar[str] = contextvars.ContextVar("version_id", default="-")
 
-SENSITIVE_KEYS = {"authorization", "api_key", "apikey", "token", "secret", "password"}
+SENSITIVE_KEYS = {
+    "authorization",
+    "api_key",
+    "apikey",
+    "x-qw-api-key",
+    "token",
+    "secret",
+    "password",
+}
+SENSITIVE_QUERY_PATTERN = re.compile(r"(?i)([?&](?:key|api_key|apikey|token)=)[^&\s]+")
 
 
 def redact(value: Any) -> Any:
@@ -26,6 +36,8 @@ def redact(value: Any) -> Any:
         }
     if isinstance(value, list):
         return [redact(item) for item in value]
+    if isinstance(value, str):
+        return SENSITIVE_QUERY_PATTERN.sub(r"\1[REDACTED]", value)
     return value
 
 

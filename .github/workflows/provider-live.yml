@@ -1,0 +1,53 @@
+name: Provider Live Smoke Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: Provider smoke test to run
+        required: true
+        default: amap
+        type: choice
+        options:
+          - amap
+          - qweather
+          - all
+
+permissions:
+  contents: read
+
+jobs:
+  provider-live:
+    runs-on: ubuntu-latest
+    environment: provider-live
+    env:
+      RUN_PROVIDER_LIVE_TESTS: "1"
+      AMAP_API_KEY: ${{ secrets.AMAP_API_KEY }}
+      AMAP_BASE_URL: https://restapi.amap.com
+      QWEATHER_API_KEY: ${{ secrets.QWEATHER_API_KEY }}
+      QWEATHER_API_HOST: ${{ secrets.QWEATHER_API_HOST }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --frozen --extra dev
+      - name: Validate selected provider secrets
+        env:
+          SELECTED_PROVIDER: ${{ inputs.provider }}
+        run: |
+          if { [ "$SELECTED_PROVIDER" = "amap" ] || [ "$SELECTED_PROVIDER" = "all" ]; } && [ -z "$AMAP_API_KEY" ]; then
+            echo "AMAP_API_KEY is not configured in the provider-live environment."
+            exit 1
+          fi
+          if { [ "$SELECTED_PROVIDER" = "qweather" ] || [ "$SELECTED_PROVIDER" = "all" ]; } && { [ -z "$QWEATHER_API_KEY" ] || [ -z "$QWEATHER_API_HOST" ]; }; then
+            echo "QWEATHER_API_KEY or QWEATHER_API_HOST is not configured in the provider-live environment."
+            exit 1
+          fi
+      - name: Run Amap smoke test
+        if: inputs.provider == 'amap' || inputs.provider == 'all'
+        run: uv run pytest -q tests/test_phase2_live_providers.py::test_amap_live_poi_geocode_driving_and_walking
+      - name: Run QWeather smoke test
+        if: inputs.provider == 'qweather' || inputs.provider == 'all'
+        run: uv run pytest -q tests/test_phase2_live_providers.py::test_qweather_live_daily_hourly_and_warning

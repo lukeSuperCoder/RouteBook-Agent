@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "badaling-main-vs-affiliates",
+      "keyword": "八达岭长城",
+      "region": "北京市",
+      "expected_action": "auto_adopt",
+      "expected_provider_place_id": "A1",
+      "fixture": "tests/fixtures/providers/amap_poi.json"
+    },
+    {
+      "id": "unique-transit-is-not-attraction",
+      "keyword": "八达岭长城站",
+      "region": "北京市",
+      "expected_action": "no_result",
+      "candidates": [
+        {"id":"T1","name":"八达岭长城站","type":"交通设施服务;火车站","address":"八达岭镇","city":"北京市","district":"延庆区","adcode":"110119","location":"116.000000,40.350000"}
+      ]
+    },
+    {
+      "id": "unique-merchant-is-not-attraction",
+      "keyword": "黄鹤楼",
+      "region": "武汉市",
+      "expected_action": "no_result",
+      "candidates": [
+        {"id":"M1","name":"黄鹤楼","type":"餐饮服务;中餐厅","address":"武昌区","city":"武汉市","district":"武昌区","adcode":"420106","location":"114.302000,30.544000"}
+      ]
+    },
+    {
+      "id": "same-name-without-region-needs-confirmation",
+      "keyword": "中山公园",
+      "region": "",
+      "expected_action": "needs_confirmation",
+      "candidates": [
+        {"id":"P1","name":"中山公园","type":"风景名胜;公园广场","address":"长宁区","city":"上海市","district":"长宁区","adcode":"310105","location":"121.420000,31.220000"},
+        {"id":"P2","name":"中山公园","type":"风景名胜;公园广场","address":"东城区","city":"北京市","district":"东城区","adcode":"110101","location":"116.390000,39.910000"}
+      ]
+    },
+    {
+      "id": "generic-great-wall-needs-confirmation",
+      "keyword": "长城",
+      "region": "北京市",
+      "expected_action": "needs_confirmation",
+      "candidates": [
+        {"id":"G1","name":"八达岭长城","type":"风景名胜;世界遗产;国家级景点","address":"八达岭镇","city":"北京市","district":"延庆区","adcode":"110119","location":"116.016802,40.356188"},
+        {"id":"G2","name":"慕田峪长城","type":"风景名胜;世界遗产;国家级景点","address":"渤海镇","city":"北京市","district":"怀柔区","adcode":"110116","location":"116.560000,40.430000"}
+      ]
+    }
+  ]
+}
