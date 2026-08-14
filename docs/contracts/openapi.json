@@ -79,6 +79,70 @@
         "title": "CreateRouteBookRequest",
         "type": "object"
       },
+      "EditExecutionRead": {
+        "additionalProperties": false,
+        "properties": {
+          "candidates": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "clarification": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clarification"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProposalRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reused": {
+            "default": false,
+            "title": "Reused",
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "completed",
+              "pending_confirmation",
+              "needs_clarification"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version Id"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "EditExecutionRead",
+        "type": "object"
+      },
       "ErrorItem": {
         "additionalProperties": false,
         "properties": {
@@ -132,6 +196,82 @@
         ],
         "title": "FactStatus",
         "type": "string"
+      },
+      "FinalizeRouteBookRead": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "final_page_id": {
+            "format": "uuid",
+            "title": "Final Page Id",
+            "type": "string"
+          },
+          "privacy_policy": {
+            "enum": [
+              "public",
+              "redact_addresses"
+            ],
+            "title": "Privacy Policy",
+            "type": "string"
+          },
+          "public_token": {
+            "title": "Public Token",
+            "type": "string"
+          },
+          "routebook_id": {
+            "format": "uuid",
+            "title": "Routebook Id",
+            "type": "string"
+          },
+          "routebook_version_id": {
+            "format": "uuid",
+            "title": "Routebook Version Id",
+            "type": "string"
+          },
+          "share_url": {
+            "title": "Share Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "final_page_id",
+          "routebook_id",
+          "routebook_version_id",
+          "public_token",
+          "share_url",
+          "privacy_policy",
+          "created_at"
+        ],
+        "title": "FinalizeRouteBookRead",
+        "type": "object"
+      },
+      "FinalizeRouteBookRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "privacy_policy": {
+            "default": "redact_addresses",
+            "enum": [
+              "public",
+              "redact_addresses"
+            ],
+            "title": "Privacy Policy",
+            "type": "string"
+          },
+          "routebook_version_id": {
+            "format": "uuid",
+            "title": "Routebook Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "routebook_version_id"
+        ],
+        "title": "FinalizeRouteBookRequest",
+        "type": "object"
       },
       "HTTPValidationError": {
         "properties": {
@@ -392,6 +532,109 @@
         ],
         "title": "PlaceSnapshot",
         "type": "object"
+      },
+      "ProposalDecisionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": [
+              "accept",
+              "reject"
+            ],
+            "title": "Decision",
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "title": "ProposalDecisionRequest",
+        "type": "object"
+      },
+      "ProposalRead": {
+        "additionalProperties": false,
+        "properties": {
+          "base_version_id": {
+            "format": "uuid",
+            "title": "Base Version Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "impact_scope": {
+            "additionalProperties": true,
+            "title": "Impact Scope",
+            "type": "object"
+          },
+          "preview_snapshot": {
+            "$ref": "#/components/schemas/RouteBookSnapshotV1"
+          },
+          "resolved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved At"
+          },
+          "risk_flags": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Risk Flags",
+            "type": "array"
+          },
+          "routebook_id": {
+            "format": "uuid",
+            "title": "Routebook Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProposalStatus"
+          },
+          "workflow_run_id": {
+            "format": "uuid",
+            "title": "Workflow Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "routebook_id",
+          "base_version_id",
+          "workflow_run_id",
+          "preview_snapshot",
+          "impact_scope",
+          "risk_flags",
+          "status",
+          "created_at",
+          "resolved_at"
+        ],
+        "title": "ProposalRead",
+        "type": "object"
+      },
+      "ProposalStatus": {
+        "enum": [
+          "pending",
+          "accepted",
+          "rejected",
+          "expired"
+        ],
+        "title": "ProposalStatus",
+        "type": "string"
       },
       "RecommendationBatchRead": {
         "additionalProperties": false,
@@ -992,6 +1235,92 @@
         "title": "RouteBookCreationAccepted",
         "type": "object"
       },
+      "RouteBookEditRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "day_reference": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Reference"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "operation": {
+            "enum": [
+              "add_place",
+              "remove_place",
+              "replace_place",
+              "edit_day",
+              "change_days"
+            ],
+            "title": "Operation",
+            "type": "string"
+          },
+          "operation_id": {
+            "format": "uuid",
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "place_reference": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Place Reference"
+          },
+          "replacement_place": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaceSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target_days": {
+            "anyOf": [
+              {
+                "maximum": 7.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Days"
+          }
+        },
+        "required": [
+          "operation_id",
+          "operation"
+        ],
+        "title": "RouteBookEditRequest",
+        "type": "object"
+      },
       "RouteBookMessageCreate": {
         "additionalProperties": false,
         "properties": {
@@ -1319,6 +1648,65 @@
         "title": "RouteSegmentSnapshot",
         "type": "object"
       },
+      "SharedRouteBookRead": {
+        "additionalProperties": false,
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "privacy_policy": {
+            "enum": [
+              "public",
+              "redact_addresses"
+            ],
+            "title": "Privacy Policy",
+            "type": "string"
+          },
+          "routebook_version_id": {
+            "format": "uuid",
+            "title": "Routebook Version Id",
+            "type": "string"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/RouteBookSnapshotV1"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "version_number": {
+            "title": "Version Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "title",
+          "routebook_version_id",
+          "version_number",
+          "snapshot",
+          "privacy_policy",
+          "created_at"
+        ],
+        "title": "SharedRouteBookRead",
+        "type": "object"
+      },
+      "UndoRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "operation_id": {
+            "format": "uuid",
+            "title": "Operation Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id"
+        ],
+        "title": "UndoRequest",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -1590,6 +1978,79 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/proposals/{proposal_id}/decision": {
+      "post": {
+        "operationId": "decide_proposal_api_proposals__proposal_id__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposalDecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditExecutionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Decide Proposal",
+        "tags": [
+          "editing"
+        ]
+      }
+    },
     "/api/routebooks": {
       "post": {
         "operationId": "create_routebook_api_routebooks_post",
@@ -1712,6 +2173,152 @@
         "summary": "Get Routebook",
         "tags": [
           "routebooks"
+        ]
+      }
+    },
+    "/api/routebooks/{routebook_id}/edits": {
+      "post": {
+        "operationId": "edit_routebook_api_routebooks__routebook_id__edits_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Routebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RouteBookEditRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditExecutionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Edit Routebook",
+        "tags": [
+          "editing"
+        ]
+      }
+    },
+    "/api/routebooks/{routebook_id}/finalize": {
+      "post": {
+        "operationId": "finalize_routebook_api_routebooks__routebook_id__finalize_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Routebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinalizeRouteBookRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinalizeRouteBookRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Finalize Routebook",
+        "tags": [
+          "finalization"
         ]
       }
     },
@@ -1903,6 +2510,63 @@
         "summary": "Create Routebook Message",
         "tags": [
           "messages"
+        ]
+      }
+    },
+    "/api/routebooks/{routebook_id}/proposals": {
+      "get": {
+        "operationId": "list_proposals_api_routebooks__routebook_id__proposals_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Routebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProposalRead"
+                  },
+                  "title": "Response List Proposals Api Routebooks  Routebook Id  Proposals Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Proposals",
+        "tags": [
+          "editing"
         ]
       }
     },
@@ -2165,6 +2829,136 @@
         "summary": "Submit Place Feedback",
         "tags": [
           "recommendations"
+        ]
+      }
+    },
+    "/api/routebooks/{routebook_id}/undo": {
+      "post": {
+        "operationId": "undo_routebook_api_routebooks__routebook_id__undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Routebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UndoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditExecutionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo Routebook",
+        "tags": [
+          "editing"
+        ]
+      }
+    },
+    "/api/routebooks/{routebook_id}/versions": {
+      "get": {
+        "operationId": "list_versions_api_routebooks__routebook_id__versions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Routebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RouteBookVersionRead"
+                  },
+                  "title": "Response List Versions Api Routebooks  Routebook Id  Versions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Versions",
+        "tags": [
+          "routebooks"
         ]
       }
     },
@@ -2447,6 +3241,58 @@
         "summary": "Ready",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/share/{public_token}": {
+      "get": {
+        "operationId": "get_shared_routebook_share__public_token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "public_token",
+            "required": true,
+            "schema": {
+              "title": "Public Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SharedRouteBookRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Shared Routebook",
+        "tags": [
+          "finalization"
         ]
       }
     }

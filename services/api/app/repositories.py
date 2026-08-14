@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from .models import (
     ChangeProposalModel,
     ConversationMessageModel,
+    FinalPageModel,
     IdempotencyRecordModel,
     LlmCallRecordModel,
     PlaceProposalModel,
@@ -61,6 +62,31 @@ class VersionRepository:
             select(RouteBookVersionModel).where(RouteBookVersionModel.workflow_run_id == run_id)
         )
 
+    def list_for_routebook(self, routebook_id: UUID) -> list[RouteBookVersionModel]:
+        return list(
+            self.session.scalars(
+                select(RouteBookVersionModel)
+                .where(RouteBookVersionModel.routebook_id == routebook_id)
+                .order_by(RouteBookVersionModel.version_number.desc())
+            )
+        )
+
+
+class FinalPageRepository:
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def add(self, final_page: FinalPageModel) -> None:
+        self.session.add(final_page)
+
+    def get_by_token_hash(self, token_hash: str) -> FinalPageModel | None:
+        return self.session.scalar(
+            select(FinalPageModel).where(
+                FinalPageModel.public_token_hash == token_hash,
+                FinalPageModel.revoked_at.is_(None),
+            )
+        )
+
 
 class ProposalRepository:
     def __init__(self, session: Session) -> None:
@@ -74,6 +100,15 @@ class ProposalRepository:
         if for_update:
             statement = statement.with_for_update()
         return self.session.scalar(statement)
+
+    def list_for_routebook(self, routebook_id: UUID) -> list[ChangeProposalModel]:
+        return list(
+            self.session.scalars(
+                select(ChangeProposalModel)
+                .where(ChangeProposalModel.routebook_id == routebook_id)
+                .order_by(ChangeProposalModel.created_at, ChangeProposalModel.id)
+            )
+        )
 
 
 class IdempotencyRepository:
@@ -212,8 +247,6 @@ class RecommendationRepository:
     def list_for_routebook(self, routebook_id: UUID) -> list[PlaceProposalModel]:
         return list(
             self.session.scalars(
-                select(PlaceProposalModel).where(
-                    PlaceProposalModel.routebook_id == routebook_id
-                )
+                select(PlaceProposalModel).where(PlaceProposalModel.routebook_id == routebook_id)
             )
         )

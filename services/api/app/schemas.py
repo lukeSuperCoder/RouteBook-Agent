@@ -285,6 +285,75 @@ class ItineraryPlanningRead(ApiModel):
     conflicts: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class RouteBookEditRequest(ApiModel):
+    operation_id: UUID
+    operation: Literal["add_place", "remove_place", "replace_place", "edit_day", "change_days"]
+    day_reference: str | None = Field(default=None, max_length=40)
+    place_reference: str | None = Field(default=None, max_length=200)
+    replacement_place: PlaceSnapshot | None = None
+    target_days: int | None = Field(default=None, ge=1, le=7)
+    note: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def validate_edit_fields(self) -> RouteBookEditRequest:
+        if self.operation in {"remove_place", "replace_place"} and not self.place_reference:
+            raise ValueError("remove and replace operations require place_reference")
+        if self.operation in {"add_place", "replace_place"} and self.replacement_place is None:
+            raise ValueError("add and replace operations require replacement_place")
+        if self.operation == "edit_day" and not self.day_reference:
+            raise ValueError("edit_day requires day_reference")
+        if self.operation == "change_days" and self.target_days is None:
+            raise ValueError("change_days requires target_days")
+        return self
+
+
+class EditExecutionRead(ApiModel):
+    status: Literal["completed", "pending_confirmation", "needs_clarification"]
+    version_id: UUID | None = None
+    proposal: ProposalRead | None = None
+    reused: bool = False
+    clarification: str | None = None
+    candidates: list[str] = Field(default_factory=list)
+
+
+class ProposalDecisionRequest(ApiModel):
+    decision: Literal["accept", "reject"]
+
+
+class UndoRequest(ApiModel):
+    operation_id: UUID
+
+
+class FinalizeRouteBookRequest(ApiModel):
+    routebook_version_id: UUID
+    privacy_policy: Literal["public", "redact_addresses"] = "redact_addresses"
+
+
+class FinalizationIssue(ApiModel):
+    code: str
+    message: str
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class FinalizeRouteBookRead(ApiModel):
+    final_page_id: UUID
+    routebook_id: UUID
+    routebook_version_id: UUID
+    public_token: str
+    share_url: str
+    privacy_policy: Literal["public", "redact_addresses"]
+    created_at: datetime
+
+
+class SharedRouteBookRead(ApiModel):
+    title: str
+    routebook_version_id: UUID
+    version_number: int
+    snapshot: RouteBookSnapshotV1
+    privacy_policy: Literal["public", "redact_addresses"]
+    created_at: datetime
+
+
 class ProgressValue(ApiModel):
     completed: int = Field(ge=0)
     total: int = Field(ge=0)

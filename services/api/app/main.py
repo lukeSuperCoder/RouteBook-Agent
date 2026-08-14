@@ -21,6 +21,10 @@ from . import __version__
 from .auth import RequestPrincipal, get_request_principal
 from .config import get_settings
 from .db import get_session
+from .editing.graph import invoke_editing_subgraph
+from .editing.models import EditIntent, ImpactScope
+from .editing.persistence import EditingPersistenceService
+from .editing.recompute import AffectedScopeRecomputer
 from .enums import RouteBookStatus, WorkflowStage, WorkflowStatus
 from .errors import (
     AppError,
@@ -28,6 +32,7 @@ from .errors import (
     NotFoundError,
     ValidationAppError,
 )
+from .finalization import FinalizationService
 from .observability import configure_logging, request_id_context
 from .planning.graph import invoke_itinerary_planning_subgraph
 from .planning.models import PlanningPlace, PlanningResult
@@ -35,6 +40,7 @@ from .planning.persistence import PlanningPersistenceService
 from .planning.service import ItineraryPlanningService
 from .presenters import (
     conversation_message_read,
+    proposal_read,
     routebook_read,
     version_read,
     workflow_run_read,
@@ -49,6 +55,7 @@ from .recommendations.service import RecommendationService
 from .recommendations.strategy import build_recommendation_strategy
 from .repositories import (
     ConversationMessageRepository,
+    ProposalRepository,
     RecommendationRepository,
     RouteBookRepository,
     VersionRepository,
@@ -57,10 +64,15 @@ from .repositories import (
 from .schemas import (
     ConversationMessageRead,
     CreateRouteBookRequest,
+    EditExecutionRead,
     ErrorResponse,
+    FinalizeRouteBookRead,
+    FinalizeRouteBookRequest,
     HealthResponse,
     ItineraryPlanningRead,
     PlaceFeedbackRequest,
+    ProposalDecisionRequest,
+    ProposalRead,
     RecommendationBatchRead,
     RecommendationGenerateRequest,
     RecommendationObservabilityRead,
@@ -68,9 +80,13 @@ from .schemas import (
     RequirementSnapshot,
     RequirementWorkflowAccepted,
     RouteBookCreationAccepted,
+    RouteBookEditRequest,
     RouteBookMessageCreate,
     RouteBookRead,
+    RouteBookSnapshotV1,
     RouteBookVersionRead,
+    SharedRouteBookRead,
+    UndoRequest,
     WorkflowRunRead,
 )
 from .services import (
@@ -90,6 +106,7 @@ RecommendationRunner = Callable[
     [RequirementSnapshot, int, list[PlaceFeedback]], RecommendationResult
 ]
 ItineraryRunner = Callable[[RequirementSnapshot, list[PlanningPlace]], PlanningResult]
+EditRecomputeRunner = Callable[[RouteBookSnapshotV1, ImpactScope], RouteBookSnapshotV1]
 
 
 @asynccontextmanager
@@ -135,11 +152,26 @@ def _run_itinerary(
     return invoke_itinerary_planning_subgraph(service, requirements, places)
 
 
+def _recompute_edit_scope(
+    snapshot: RouteBookSnapshotV1, impact: ImpactScope
+) -> RouteBookSnapshotV1:
+    amap = AmapAdapter()
+    weather = QWeatherAdapter()
+
+    def route(origin: Coordinate, destination: Coordinate, mode: str) -> RouteResult:
+        if mode == "walking":
+            return amap.walking_route(origin, destination)
+        return amap.driving_route(origin, destination)
+
+    return AffectedScopeRecomputer(route, weather.daily_forecast).recompute(snapshot, impact)
+
+
 def create_app(
     workflow_dispatcher: WorkflowDispatcher = dispatch_workflow,
     requirement_dispatcher: RequirementWorkflowDispatcher = _dispatch_requirement,
     recommendation_runner: RecommendationRunner = _run_recommendations,
     itinerary_runner: ItineraryRunner = _run_itinerary,
+    edit_recompute_runner: EditRecomputeRunner = _recompute_edit_scope,
 ) -> FastAPI:
     app = FastAPI(
         title="RouteBook Agent API",
@@ -150,6 +182,7 @@ def create_app(
     app.state.requirement_dispatcher = requirement_dispatcher
     app.state.recommendation_runner = recommendation_runner
     app.state.itinerary_runner = itinerary_runner
+    app.state.edit_recompute_runner = edit_recompute_runner
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.api_cors_origins,
@@ -378,6 +411,24 @@ def create_app(
         return version_read(model)
 
     @app.get(
+        "/api/routebooks/{routebook_id}/versions",
+        response_model=list[RouteBookVersionRead],
+        responses={404: {"model": ErrorResponse}},
+        tags=["routebooks"],
+    )
+    def list_versions(
+        routebook_id: UUID,
+        session: Session = Depends(get_session),
+        _principal: RequestPrincipal = Depends(get_request_principal),
+    ) -> list[RouteBookVersionRead]:
+        if RouteBookRepository(session).get(routebook_id) is None:
+            raise NotFoundError(details={"resource": "routebook"})
+        return [
+            version_read(item)
+            for item in VersionRepository(session).list_for_routebook(routebook_id)
+        ]
+
+    @app.get(
         "/api/workflow-runs/{run_id}",
         response_model=WorkflowRunRead,
         responses={404: {"model": ErrorResponse}},
@@ -579,6 +630,165 @@ def create_app(
             repair_attempts=result.draft.repair_attempts,
             degraded=result.draft.degraded,
         )
+
+    @app.post(
+        "/api/routebooks/{routebook_id}/edits",
+        response_model=EditExecutionRead,
+        responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+        tags=["editing"],
+    )
+    def edit_routebook(
+        routebook_id: UUID,
+        payload: RouteBookEditRequest,
+        session: Session = Depends(get_session),
+        _principal: RequestPrincipal = Depends(get_request_principal),
+    ) -> EditExecutionRead:
+        with session.begin():
+            base_version_id, snapshot = EditingPersistenceService.load_current(
+                session, routebook_id
+            )
+        intent = EditIntent.model_validate(
+            payload.model_dump(exclude={"operation_id"}, mode="python")
+        )
+        plan = invoke_editing_subgraph(snapshot, intent)
+        if not plan.resolution.resolved:
+            return EditExecutionRead(
+                status="needs_clarification",
+                clarification=plan.resolution.clarification,
+                candidates=plan.resolution.candidates,
+            )
+        if plan.preview is not None and intent.operation in {
+            "add_place",
+            "remove_place",
+            "replace_place",
+            "change_days",
+        }:
+            recomputed = app.state.edit_recompute_runner(plan.preview, plan.impact)
+            plan = plan.model_copy(update={"preview": recomputed})
+        with session.begin():
+            result = EditingPersistenceService.execute(
+                session,
+                routebook_id=routebook_id,
+                base_version_id=base_version_id,
+                base_snapshot=snapshot,
+                plan=plan,
+                operation_id=payload.operation_id,
+            )
+        return EditExecutionRead(
+            status="pending_confirmation" if result.proposal else "completed",
+            version_id=result.version_id,
+            proposal=proposal_read(result.proposal) if result.proposal else None,
+            reused=result.reused,
+        )
+
+    @app.get(
+        "/api/routebooks/{routebook_id}/proposals",
+        response_model=list[ProposalRead],
+        responses={404: {"model": ErrorResponse}},
+        tags=["editing"],
+    )
+    def list_proposals(
+        routebook_id: UUID,
+        session: Session = Depends(get_session),
+        _principal: RequestPrincipal = Depends(get_request_principal),
+    ) -> list[ProposalRead]:
+        if RouteBookRepository(session).get(routebook_id) is None:
+            raise NotFoundError(details={"resource": "routebook"})
+        return [
+            proposal_read(item)
+            for item in ProposalRepository(session).list_for_routebook(routebook_id)
+        ]
+
+    @app.post(
+        "/api/proposals/{proposal_id}/decision",
+        response_model=EditExecutionRead,
+        responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+        tags=["editing"],
+    )
+    def decide_proposal(
+        proposal_id: UUID,
+        payload: ProposalDecisionRequest,
+        session: Session = Depends(get_session),
+        _principal: RequestPrincipal = Depends(get_request_principal),
+    ) -> EditExecutionRead:
+        with session.begin():
+            result = EditingPersistenceService.resolve_proposal(
+                session, proposal_id=proposal_id, accept=payload.decision == "accept"
+            )
+        return EditExecutionRead(
+            status="completed",
+            version_id=result.version_id,
+            proposal=proposal_read(result.proposal) if result.proposal else None,
+            reused=result.reused,
+        )
+
+    @app.post(
+        "/api/routebooks/{routebook_id}/undo",
+        response_model=EditExecutionRead,
+        responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+        tags=["editing"],
+    )
+    def undo_routebook(
+        routebook_id: UUID,
+        payload: UndoRequest,
+        session: Session = Depends(get_session),
+        _principal: RequestPrincipal = Depends(get_request_principal),
+    ) -> EditExecutionRead:
+        with session.begin():
+            result = EditingPersistenceService.undo(
+                session, routebook_id=routebook_id, operation_id=payload.operation_id
+            )
+        return EditExecutionRead(
+            status="completed", version_id=result.version_id, reused=result.reused
+        )
+
+    @app.post(
+        "/api/routebooks/{routebook_id}/finalize",
+        response_model=FinalizeRouteBookRead,
+        responses={
+            404: {"model": ErrorResponse},
+            409: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+        tags=["finalization"],
+    )
+    def finalize_routebook(
+        routebook_id: UUID,
+        payload: FinalizeRouteBookRequest,
+        session: Session = Depends(get_session),
+        _principal: RequestPrincipal = Depends(get_request_principal),
+    ) -> FinalizeRouteBookRead:
+        with session.begin():
+            result = FinalizationService.finalize(
+                session,
+                routebook_id=routebook_id,
+                version_id=payload.routebook_version_id,
+                privacy_policy=payload.privacy_policy,
+            )
+        page = result.final_page
+        return FinalizeRouteBookRead(
+            final_page_id=page.id,
+            routebook_id=page.routebook_id,
+            routebook_version_id=page.routebook_version_id,
+            public_token=result.public_token,
+            share_url=f"/share/{result.public_token}",
+            privacy_policy=page.privacy_policy,
+            created_at=page.created_at,
+        )
+
+    @app.get(
+        "/share/{public_token}",
+        response_model=SharedRouteBookRead,
+        responses={404: {"model": ErrorResponse}},
+        tags=["finalization"],
+    )
+    def get_shared_routebook(
+        public_token: str,
+        session: Session = Depends(get_session),
+    ) -> SharedRouteBookRead:
+        if not re.fullmatch(r"[A-Za-z0-9_-]{24,64}", public_token):
+            raise NotFoundError(details={"resource": "shared_routebook"})
+        return FinalizationService.load_shared(session, public_token)
 
     return app
 

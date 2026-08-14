@@ -312,3 +312,26 @@ class PlaceProposalModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
+
+
+class FinalPageModel(Base):
+    __tablename__ = "final_pages"
+    __table_args__ = (
+        UniqueConstraint("public_token_hash", name="final_page_public_token_hash"),
+        Index("ix_final_pages_routebook_version", "routebook_id", "routebook_version_id"),
+        {"schema": SCHEMA},
+    )
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid4)
+    routebook_id: Mapped[UUID] = mapped_column(
+        ForeignKey(f"{SCHEMA}.routebooks.id", ondelete="RESTRICT"), nullable=False
+    )
+    routebook_version_id: Mapped[UUID] = mapped_column(
+        ForeignKey(f"{SCHEMA}.routebook_versions.id", ondelete="RESTRICT"), nullable=False
+    )
+    public_token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    privacy_policy: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

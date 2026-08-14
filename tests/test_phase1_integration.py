@@ -16,6 +16,9 @@ if os.getenv("RUN_INTEGRATION_TESTS") != "1":
 
 from services.api.app.checkpoint_setup import main as setup_checkpointer
 from services.api.app.db import SessionFactory
+from services.api.app.editing.models import EditIntent
+from services.api.app.editing.persistence import EditingPersistenceService
+from services.api.app.editing.service import EditingService
 from services.api.app.enums import (
     ChangeType,
     FactStatus,
@@ -24,10 +27,12 @@ from services.api.app.enums import (
     WorkflowStage,
     WorkflowStatus,
 )
-from services.api.app.errors import VersionConflictError
+from services.api.app.errors import IdempotencyConflictError, VersionConflictError
+from services.api.app.finalization import FinalizationService, token_hash
 from services.api.app.main import create_app
 from services.api.app.models import (
     ConversationMessageModel,
+    FinalPageModel,
     LlmCallRecordModel,
     RouteBookModel,
     RouteBookVersionModel,
@@ -61,7 +66,13 @@ from services.api.app.requirements import (
     RequirementPatch,
     RequirementPatchValue,
 )
-from services.api.app.schemas import RequirementValue, RouteBookSnapshotV1
+from services.api.app.schemas import (
+    ItineraryDaySnapshot,
+    PlaceSnapshot,
+    RequirementSnapshot,
+    RequirementValue,
+    RouteBookSnapshotV1,
+)
 from services.api.app.services import RequirementMessageService, VersionService, WorkflowService
 from services.api.app.worker import execute_foundation_workflow, execute_requirement_workflow
 
@@ -74,6 +85,7 @@ def clean_database():
         session.execute(
             text(
                 "TRUNCATE routebook.idempotency_records, "
+                "routebook.final_pages, "
                 "routebook.llm_call_records, "
                 "routebook.conversation_messages, "
                 "routebook.change_proposals, "
@@ -463,6 +475,211 @@ def test_planning_persists_routebook_snapshot_from_accepted_places() -> None:
         )
 
 
+def test_edit_proposal_confirmation_idempotency_and_undo_create_versions() -> None:
+    initial_run_id = _create_routebook_and_run()
+    setup_checkpointer()
+    execute_foundation_workflow.run(str(initial_run_id), "editing-integration")
+    with SessionFactory.begin() as session:
+        run = session.get(WorkflowRunModel, initial_run_id)
+        assert run is not None and run.result_version_id is not None
+        routebook_id = run.routebook_id
+        version = session.get(RouteBookVersionModel, run.result_version_id)
+        assert version is not None
+        must_id = uuid4()
+        snapshot = RouteBookSnapshotV1(
+            requirements=RequirementSnapshot(
+                days=RequirementValue(
+                    value=1,
+                    source=RequirementSource.EXPLICIT,
+                    confidence=1,
+                    confirmed=True,
+                ),
+                must_visit_place_ids=RequirementValue(
+                    value=[must_id],
+                    source=RequirementSource.EXPLICIT,
+                    confidence=1,
+                    confirmed=True,
+                ),
+            ),
+            places=[
+                PlaceSnapshot(
+                    id=must_id,
+                    provider="amap",
+                    provider_place_id="must-edit",
+                    name="必去景点",
+                    longitude=118.8,
+                    latitude=32.0,
+                    status=FactStatus.VERIFIED,
+                )
+            ],
+            days_plan=[
+                ItineraryDaySnapshot(day_number=1, place_ids=[must_id])
+            ],
+        )
+        version.snapshot_jsonb = snapshot.model_dump(mode="json")
+
+    operation_id = uuid4()
+    with SessionFactory.begin() as session:
+        base_id, base = EditingPersistenceService.load_current(session, routebook_id)
+        plan = EditingService().plan(
+            base, EditIntent(operation="remove_place", place_reference="必去景点")
+        )
+        pending = EditingPersistenceService.execute(
+            session,
+            routebook_id=routebook_id,
+            base_version_id=base_id,
+            base_snapshot=base,
+            plan=plan,
+            operation_id=operation_id,
+        )
+        assert pending.proposal is not None
+        proposal_id = pending.proposal.id
+    with SessionFactory.begin() as session:
+        routebook = session.get(RouteBookModel, routebook_id)
+        assert routebook is not None
+        assert routebook.current_version_id == base_id
+        accepted = EditingPersistenceService.resolve_proposal(
+            session, proposal_id=proposal_id, accept=True
+        )
+        assert accepted.version_id is not None
+        edited_version_id = accepted.version_id
+    with SessionFactory.begin() as session:
+        retried = EditingPersistenceService.resolve_proposal(
+            session, proposal_id=proposal_id, accept=True
+        )
+        assert retried.reused is True
+        assert retried.version_id == edited_version_id
+    undo_operation_id = uuid4()
+    with SessionFactory.begin() as session:
+        undone = EditingPersistenceService.undo(
+            session, routebook_id=routebook_id, operation_id=undo_operation_id
+        )
+        assert undone.version_id is not None
+        undo_version_id = undone.version_id
+    with SessionFactory.begin() as session:
+        retried_undo = EditingPersistenceService.undo(
+            session, routebook_id=routebook_id, operation_id=undo_operation_id
+        )
+        assert retried_undo.reused is True
+        assert retried_undo.version_id == undo_version_id
+    with SessionFactory() as session:
+        edited = session.get(RouteBookVersionModel, edited_version_id)
+        undone_version = session.get(RouteBookVersionModel, undo_version_id)
+        assert edited is not None and undone_version is not None
+        assert edited.version_number == 2
+        assert undone_version.version_number == 3
+        assert undone_version.change_type == "undo"
+        assert undone_version.parent_version_id == edited.id
+        restored = RouteBookSnapshotV1.model_validate(undone_version.snapshot_jsonb)
+        assert restored.places[0].id == must_id
+
+
+def test_edit_operation_id_reuse_with_different_plan_is_rejected() -> None:
+    initial_run_id = _create_routebook_and_run()
+    setup_checkpointer()
+    execute_foundation_workflow.run(str(initial_run_id), "edit-idempotency")
+    with SessionFactory.begin() as session:
+        run = session.get(WorkflowRunModel, initial_run_id)
+        assert run is not None and run.result_version_id is not None
+        routebook_id = run.routebook_id
+        version = session.get(RouteBookVersionModel, run.result_version_id)
+        assert version is not None
+        version.snapshot_jsonb = RouteBookSnapshotV1(
+            days_plan=[ItineraryDaySnapshot(day_number=1)]
+        ).model_dump(mode="json")
+    operation_id = uuid4()
+    with SessionFactory.begin() as session:
+        base_id, base = EditingPersistenceService.load_current(session, routebook_id)
+        first = EditingService().plan(
+            base, EditIntent(operation="edit_day", day_reference="第一天", note="早出发")
+        )
+        EditingPersistenceService.execute(
+            session,
+            routebook_id=routebook_id,
+            base_version_id=base_id,
+            base_snapshot=base,
+            plan=first,
+            operation_id=operation_id,
+        )
+    with pytest.raises(IdempotencyConflictError), SessionFactory.begin() as session:
+        different = EditingService().plan(
+            base, EditIntent(operation="edit_day", day_reference="第一天", note="晚出发")
+        )
+        EditingPersistenceService.execute(
+            session,
+            routebook_id=routebook_id,
+            base_version_id=base_id,
+            base_snapshot=base,
+            plan=different,
+            operation_id=operation_id,
+        )
+
+
+def test_proposal_rejects_acceptance_after_base_version_changes() -> None:
+    initial_run_id = _create_routebook_and_run()
+    setup_checkpointer()
+    execute_foundation_workflow.run(str(initial_run_id), "stale-proposal")
+    with SessionFactory.begin() as session:
+        run = session.get(WorkflowRunModel, initial_run_id)
+        assert run is not None and run.result_version_id is not None
+        routebook_id = run.routebook_id
+        version = session.get(RouteBookVersionModel, run.result_version_id)
+        assert version is not None
+        base_snapshot = RouteBookSnapshotV1(
+            requirements=RequirementSnapshot(
+                days=RequirementValue(
+                    value=2,
+                    source=RequirementSource.EXPLICIT,
+                    confidence=1,
+                    confirmed=True,
+                )
+            ),
+            days_plan=[
+                ItineraryDaySnapshot(day_number=1),
+                ItineraryDaySnapshot(day_number=2),
+            ],
+        )
+        version.snapshot_jsonb = base_snapshot.model_dump(mode="json")
+    with SessionFactory.begin() as session:
+        base_id, base = EditingPersistenceService.load_current(session, routebook_id)
+        plan = EditingService().plan(
+            base, EditIntent(operation="change_days", target_days=3)
+        )
+        pending = EditingPersistenceService.execute(
+            session,
+            routebook_id=routebook_id,
+            base_version_id=base_id,
+            base_snapshot=base,
+            plan=plan,
+            operation_id=uuid4(),
+        )
+        assert pending.proposal is not None
+        proposal_id = pending.proposal.id
+    with SessionFactory.begin() as session:
+        competing = WorkflowRunModel(
+            routebook_id=routebook_id,
+            run_type=WorkflowRunType.EDIT.value,
+            base_version_id=base_id,
+            status=WorkflowStatus.RUNNING.value,
+            current_stage=WorkflowStage.SAVING_VERSION.value,
+        )
+        session.add(competing)
+        session.flush()
+        VersionService.commit(
+            session,
+            routebook_id=routebook_id,
+            workflow_run_id=competing.id,
+            base_version_id=base_id,
+            snapshot=base.model_copy(update={"notes": ["concurrent edit"]}),
+            change_type=ChangeType.EDIT,
+            change_summary="concurrent",
+        )
+    with pytest.raises(VersionConflictError), SessionFactory.begin() as session:
+        EditingPersistenceService.resolve_proposal(
+            session, proposal_id=proposal_id, accept=True
+        )
+
+
 def test_requirement_resume_requires_interrupted_run_and_is_idempotent() -> None:
     routebook_id = uuid4()
     run_id = uuid4()
@@ -511,6 +728,80 @@ def test_requirement_resume_requires_interrupted_run_and_is_idempotent() -> None
             .select_from(ConversationMessageModel)
             .where(ConversationMessageModel.workflow_run_id == run_id)
         ) == 1
+
+
+def test_final_page_stays_bound_to_version_and_redacts_addresses() -> None:
+    run_id = _create_routebook_and_run()
+    setup_checkpointer()
+    execute_foundation_workflow.run(str(run_id), "integration-request")
+    place = PlaceSnapshot(
+        id=uuid4(),
+        provider="amap",
+        provider_place_id="amap-final-1",
+        name="中山陵",
+        address="南京市玄武区石象路 7 号",
+        longitude=118.85,
+        latitude=32.06,
+        status=FactStatus.VERIFIED,
+    )
+    with SessionFactory.begin() as session:
+        run = session.get(WorkflowRunModel, run_id)
+        assert run is not None and run.result_version_id is not None
+        routebook = session.get(RouteBookModel, run.routebook_id)
+        version = session.get(RouteBookVersionModel, run.result_version_id)
+        assert routebook is not None and version is not None
+        snapshot = RouteBookSnapshotV1(
+            requirements=RequirementSnapshot(days=RequirementValue(value=1)),
+            places=[place],
+            days_plan=[ItineraryDaySnapshot(day_number=1, place_ids=[place.id])],
+        )
+        version.snapshot_jsonb = snapshot.model_dump(mode="json")
+        result = FinalizationService.finalize(
+            session,
+            routebook_id=routebook.id,
+            version_id=version.id,
+            privacy_policy="redact_addresses",
+        )
+        public_token = result.public_token
+        final_version_id = version.id
+
+    with SessionFactory.begin() as session:
+        routebook = session.get(RouteBookModel, run.routebook_id)
+        assert routebook is not None
+        newer_run = WorkflowRunModel(
+            routebook_id=routebook.id,
+            run_type=WorkflowRunType.EDIT.value,
+            base_version_id=routebook.current_version_id,
+            status=WorkflowStatus.COMPLETED.value,
+            current_stage=WorkflowStage.COMPLETED.value,
+        )
+        session.add(newer_run)
+        session.flush()
+        newer = RouteBookVersionModel(
+            routebook_id=routebook.id,
+            version_number=2,
+            parent_version_id=routebook.current_version_id,
+            snapshot_jsonb=RouteBookSnapshotV1(notes=["后续草稿"]).model_dump(mode="json"),
+            change_type="edit",
+            change_summary="后续修改",
+            workflow_run_id=newer_run.id,
+        )
+        session.add(newer)
+        session.flush()
+        routebook.current_version_id = newer.id
+
+    with SessionFactory() as session:
+        shared = FinalizationService.load_shared(session, public_token)
+        stored = session.scalar(
+            select(FinalPageModel).where(FinalPageModel.routebook_version_id == final_version_id)
+        )
+        assert stored is not None
+        assert stored.public_token_hash == token_hash(public_token)
+        assert public_token not in stored.public_token_hash
+        assert shared.routebook_version_id == final_version_id
+        assert shared.snapshot.places[0].name == "中山陵"
+        assert shared.snapshot.places[0].address == ""
+        assert "后续草稿" not in shared.snapshot.notes
 
 
 def test_requirement_worker_interrupts_resumes_and_commits_one_version(monkeypatch) -> None:

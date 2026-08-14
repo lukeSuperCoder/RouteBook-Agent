@@ -92,6 +92,8 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         API_INTERNAL_URL: http://api:8000
+        NEXT_PUBLIC_AMAP_JS_KEY: ${NEXT_PUBLIC_AMAP_JS_KEY:-}
+        NEXT_PUBLIC_AMAP_SECURITY_CODE: ${NEXT_PUBLIC_AMAP_SECURITY_CODE:-}
     environment:
       API_INTERNAL_URL: http://api:8000
     ports:

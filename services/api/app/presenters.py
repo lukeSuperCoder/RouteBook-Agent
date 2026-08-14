@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .enums import RouteBookStatus, WorkflowRunType, WorkflowStage, WorkflowStatus
 from .models import (
+    ChangeProposalModel,
     ConversationMessageModel,
     RouteBookModel,
     RouteBookVersionModel,
@@ -9,11 +10,32 @@ from .models import (
 )
 from .schemas import (
     ConversationMessageRead,
+    ProposalRead,
     RouteBookRead,
     RouteBookSnapshotV1,
     RouteBookVersionRead,
     WorkflowRunRead,
 )
+
+
+def proposal_read(model: ChangeProposalModel) -> ProposalRead:
+    impact_scope = {
+        key: value
+        for key, value in model.impact_scope_jsonb.items()
+        if key != "operation_fingerprint"
+    }
+    return ProposalRead(
+        id=model.id,
+        routebook_id=model.routebook_id,
+        base_version_id=model.base_version_id,
+        workflow_run_id=model.workflow_run_id,
+        preview_snapshot=RouteBookSnapshotV1.model_validate(model.preview_snapshot_jsonb),
+        impact_scope=impact_scope,
+        risk_flags=model.risk_flags_jsonb,
+        status=model.status,
+        created_at=model.created_at,
+        resolved_at=model.resolved_at,
+    )
 
 
 def conversation_message_read(model: ConversationMessageModel) -> ConversationMessageRead:
