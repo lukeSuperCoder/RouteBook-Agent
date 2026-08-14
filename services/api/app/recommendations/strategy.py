@@ -46,6 +46,7 @@ def build_recommendation_strategy(
         categories = ["attraction", "museum", "park", "landmark"]
     if not query_terms:
         query_terms = [f"{destination}必游景点", f"{destination}博物馆", f"{destination}公园"]
+    query_terms = [*(requirements.must_visit_place_texts.value or []), *query_terms]
     query_terms.extend(requirements.optional_place_texts.value or [])
 
     reject_too_far = "too_far" in (rejected_reasons or [])

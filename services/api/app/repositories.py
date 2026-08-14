@@ -79,6 +79,21 @@ class FinalPageRepository:
     def add(self, final_page: FinalPageModel) -> None:
         self.session.add(final_page)
 
+    def get(self, final_page_id: UUID) -> FinalPageModel | None:
+        return self.session.get(FinalPageModel, final_page_id)
+
+    def get_active_for_version(
+        self, routebook_id: UUID, version_id: UUID, privacy_policy: str
+    ) -> FinalPageModel | None:
+        return self.session.scalar(
+            select(FinalPageModel).where(
+                FinalPageModel.routebook_id == routebook_id,
+                FinalPageModel.routebook_version_id == version_id,
+                FinalPageModel.privacy_policy == privacy_policy,
+                FinalPageModel.revoked_at.is_(None),
+            )
+        )
+
     def get_by_token_hash(self, token_hash: str) -> FinalPageModel | None:
         return self.session.scalar(
             select(FinalPageModel).where(

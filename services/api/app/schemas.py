@@ -345,6 +345,11 @@ class FinalizeRouteBookRead(ApiModel):
     created_at: datetime
 
 
+class RevokeFinalPageRead(ApiModel):
+    final_page_id: UUID
+    revoked_at: datetime
+
+
 class SharedRouteBookRead(ApiModel):
     title: str
     routebook_version_id: UUID

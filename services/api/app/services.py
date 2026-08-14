@@ -126,6 +126,27 @@ class RouteBookService:
 
 class VersionService:
     @staticmethod
+    def resolve_requirement_base(
+        session: Session,
+        *,
+        routebook_id: UUID,
+        base_version_id: UUID | None,
+    ) -> UUID | None:
+        """Adopt a concurrently-created empty v1 before saving the first requirement snapshot."""
+        routebook = RouteBookRepository(session).get(routebook_id, for_update=True)
+        if routebook is None:
+            raise NotFoundError(details={"resource": "routebook"})
+        if routebook.current_version_id == base_version_id:
+            return base_version_id
+        if base_version_id is None and routebook.current_version_id is not None:
+            current = VersionRepository(session).get(routebook.current_version_id)
+            if current is not None:
+                current_snapshot = RouteBookSnapshotV1.model_validate(current.snapshot_jsonb)
+                if current_snapshot == RouteBookSnapshotV1():
+                    return current.id
+        raise VersionConflictError()
+
+    @staticmethod
     def commit(
         session: Session,
         *,

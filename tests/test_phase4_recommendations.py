@@ -85,6 +85,16 @@ def test_strategy_translates_confirmed_preferences_and_too_far_feedback() -> Non
     assert any("历史景点" in query for query in strategy.query_terms)
 
 
+def test_strategy_searches_explicit_must_visit_before_generic_queries() -> None:
+    confirmed = requirements().model_copy(
+        update={"must_visit_place_texts": RequirementValue(value=["中山陵"])}
+    )
+
+    strategy = build_recommendation_strategy(confirmed)
+
+    assert strategy.query_terms[0] == "中山陵"
+
+
 def test_multi_query_recall_filters_deduplicates_and_diversifies() -> None:
     attraction = candidate("a", "南京博物院", category=NormalizedPlaceCategory.MUSEUM)
     park = candidate(

@@ -60,7 +60,7 @@ class RecommendationService:
         ranked: list[tuple[float, PlaceCandidate, list[str], float, list[str]]] = []
         for candidate, queries in grouped.values():
             quality = score_candidates(
-                candidate.name,
+                queries[0],
                 [candidate],
                 region=strategy.geographic_scope.region,
             ).ranked[0]

@@ -65,16 +65,18 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async (id: string) => {
-    const [book, thread, changes, history] = await Promise.all([
+    const [book, thread, changes, history, latestRecommendations] = await Promise.all([
       routeBookApi.get(id),
       routeBookApi.messages(id),
       routeBookApi.proposals(id),
       routeBookApi.versions(id),
+      routeBookApi.recommendations(id).catch(() => null),
     ]);
     setRoutebook(book);
     setMessages(thread);
     setProposals(changes);
     setVersions(history);
+    setRecommendations(latestRecommendations);
     setDisplayedVersion((current) => history.find((item) => item.id === current?.id) ?? null);
     setPreview((current) => changes.find((item) => item.id === current?.id) ?? null);
     const latestMessage = thread.at(-1);
@@ -140,9 +142,9 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
     setError(null);
     try {
       const created = await routeBookApi.create(draft.slice(0, 30));
+      const accepted = await routeBookApi.sendMessage(created.routebook_id, draft);
       history.replaceState(null, "", `?routebook=${created.routebook_id}`);
       setRoutebookId(created.routebook_id);
-      const accepted = await routeBookApi.sendMessage(created.routebook_id, draft);
       setRunId(accepted.workflow_run_id);
       setDraft("");
       await refresh(created.routebook_id);
@@ -195,8 +197,7 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
     setBusy(true);
     try {
       const result = await routeBookApi.finalize(routebookId, routebook.current_version_id);
-      window.open(result.share_url, "_blank", "noopener,noreferrer");
-      await refresh(routebookId);
+      window.location.assign(result.share_url);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "最终页面生成失败");
     } finally {

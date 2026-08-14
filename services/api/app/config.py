@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Annotated
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -65,6 +65,23 @@ class Settings(BaseSettings):
     poi_address_weight: float = Field(default=0.05, ge=0, le=1)
     poi_adcode_weight: float = Field(default=0.05, ge=0, le=1)
     poi_hard_filter_score_cap: float = Field(default=0.20, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_release_safety(self) -> Settings:
+        if self.app_env.lower() not in {"production", "prod"}:
+            return self
+        unsafe: list[str] = []
+        if any(origin.startswith("http://") for origin in self.api_cors_origins):
+            unsafe.append("API_CORS_ORIGINS must use HTTPS")
+        if "routebook:routebook@" in self.database_url:
+            unsafe.append("DATABASE_URL uses the development credential")
+        if "routebook:routebook@" in self.langgraph_database_url:
+            unsafe.append("LANGGRAPH_DATABASE_URL uses the development credential")
+        if self.log_level.upper() == "DEBUG":
+            unsafe.append("LOG_LEVEL must not be DEBUG")
+        if unsafe:
+            raise ValueError("unsafe production configuration: " + "; ".join(unsafe))
+        return self
 
     @field_validator("api_cors_origins", mode="before")
     @classmethod

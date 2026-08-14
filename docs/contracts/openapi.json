@@ -1196,6 +1196,27 @@
         "title": "RequirementWorkflowAccepted",
         "type": "object"
       },
+      "RevokeFinalPageRead": {
+        "additionalProperties": false,
+        "properties": {
+          "final_page_id": {
+            "format": "uuid",
+            "title": "Final Page Id",
+            "type": "string"
+          },
+          "revoked_at": {
+            "format": "date-time",
+            "title": "Revoked At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "final_page_id",
+          "revoked_at"
+        ],
+        "title": "RevokeFinalPageRead",
+        "type": "object"
+      },
       "RouteBookCreationAccepted": {
         "additionalProperties": false,
         "properties": {
@@ -2246,6 +2267,69 @@
         "summary": "Edit Routebook",
         "tags": [
           "editing"
+        ]
+      }
+    },
+    "/api/routebooks/{routebook_id}/final-pages/{final_page_id}/revoke": {
+      "post": {
+        "operationId": "revoke_final_page_api_routebooks__routebook_id__final_pages__final_page_id__revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Routebook Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "final_page_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Final Page Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevokeFinalPageRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Final Page",
+        "tags": [
+          "finalization"
         ]
       }
     },

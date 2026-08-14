@@ -79,6 +79,7 @@ from .schemas import (
     RequirementResumeRequest,
     RequirementSnapshot,
     RequirementWorkflowAccepted,
+    RevokeFinalPageRead,
     RouteBookCreationAccepted,
     RouteBookEditRequest,
     RouteBookMessageCreate,
@@ -789,6 +790,24 @@ def create_app(
         if not re.fullmatch(r"[A-Za-z0-9_-]{24,64}", public_token):
             raise NotFoundError(details={"resource": "shared_routebook"})
         return FinalizationService.load_shared(session, public_token)
+
+    @app.post(
+        "/api/routebooks/{routebook_id}/final-pages/{final_page_id}/revoke",
+        response_model=RevokeFinalPageRead,
+        responses={404: {"model": ErrorResponse}},
+        tags=["finalization"],
+    )
+    def revoke_final_page(
+        routebook_id: UUID,
+        final_page_id: UUID,
+        session: Session = Depends(get_session),
+        _principal: RequestPrincipal = Depends(get_request_principal),
+    ) -> RevokeFinalPageRead:
+        with session.begin():
+            revoked_at = FinalizationService.revoke(
+                session, routebook_id=routebook_id, final_page_id=final_page_id
+            )
+        return RevokeFinalPageRead(final_page_id=final_page_id, revoked_at=revoked_at)
 
     return app
 

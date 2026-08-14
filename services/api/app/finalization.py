@@ -119,6 +119,14 @@ class FinalizationService:
                 "当前版本未通过最终完整性检查。",
                 details={"issues": [item.model_dump(mode="json") for item in issues]},
             )
+        existing = FinalPageRepository(session).get_active_for_version(
+            routebook_id, version_id, privacy_policy
+        )
+        if existing is not None:
+            raise VersionConflictError(
+                "该版本和隐私策略已存在有效分享页，请先撤销后再生成。",
+                details={"final_page_id": str(existing.id)},
+            )
         public_token = secrets.token_urlsafe(24)
         final_page = FinalPageModel(
             routebook_id=routebook_id,
@@ -132,6 +140,17 @@ class FinalizationService:
         routebook.status = "final"
         session.flush()
         return FinalizationResult(final_page=final_page, public_token=public_token)
+
+    @staticmethod
+    def revoke(session: Session, *, routebook_id: UUID, final_page_id: UUID) -> datetime:
+        routebook = RouteBookRepository(session).get(routebook_id, for_update=True)
+        final_page = FinalPageRepository(session).get(final_page_id)
+        if routebook is None or final_page is None or final_page.routebook_id != routebook_id:
+            raise NotFoundError(details={"resource": "final_page"})
+        if final_page.revoked_at is None:
+            final_page.revoked_at = datetime.now(UTC)
+            session.flush()
+        return final_page.revoked_at
 
     @staticmethod
     def load_shared(session: Session, public_token: str) -> SharedRouteBookRead:

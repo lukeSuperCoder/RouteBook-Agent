@@ -132,7 +132,7 @@ export interface SystemHealth {
   checkedAt: string;
 }
 
-const browserApiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const browserApiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/backend";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${browserApiBase}${path}`, {

@@ -251,13 +251,20 @@ def execute_requirement_workflow(
                 WorkflowService.mark_interrupted(session, run_id)
             else:
                 updated = snapshot.model_copy(update={"requirements": decision.snapshot})
+                resolved_base_version_id = VersionService.resolve_requirement_base(
+                    session,
+                    routebook_id=routebook_id,
+                    base_version_id=base_version_id,
+                )
                 VersionService.commit(
                     session,
                     routebook_id=routebook_id,
                     workflow_run_id=run_id,
-                    base_version_id=base_version_id,
+                    base_version_id=resolved_base_version_id,
                     snapshot=updated,
-                    change_type=ChangeType.EDIT if base_version_id else ChangeType.CREATE,
+                    change_type=(
+                        ChangeType.EDIT if resolved_base_version_id else ChangeType.CREATE
+                    ),
                     change_summary="更新旅行需求",
                     source_user_message=message_text,
                 )

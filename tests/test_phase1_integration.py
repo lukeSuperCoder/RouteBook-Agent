@@ -189,6 +189,23 @@ def test_stale_base_version_returns_version_conflict() -> None:
         )
 
 
+def test_first_requirement_rebases_onto_concurrently_created_empty_version() -> None:
+    foundation_run_id = _create_routebook_and_run()
+    setup_checkpointer()
+    execute_foundation_workflow.run(str(foundation_run_id), "integration-request")
+
+    with SessionFactory.begin() as session:
+        foundation_run = session.get(WorkflowRunModel, foundation_run_id)
+        assert foundation_run is not None
+        resolved = VersionService.resolve_requirement_base(
+            session,
+            routebook_id=foundation_run.routebook_id,
+            base_version_id=None,
+        )
+
+    assert resolved == foundation_run.result_version_id
+
+
 def test_requirement_message_api_is_idempotent_and_dispatches_safe_retry() -> None:
     routebook_id = uuid4()
     foundation_run_id = uuid4()

@@ -4,7 +4,14 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from ..enums import ChangeType, RouteBookStatus, WorkflowRunType, WorkflowStage, WorkflowStatus
+from ..enums import (
+    ChangeType,
+    RequirementSource,
+    RouteBookStatus,
+    WorkflowRunType,
+    WorkflowStage,
+    WorkflowStatus,
+)
 from ..errors import NotFoundError, WorkflowStateConflictError
 from ..models import WorkflowRunModel
 from ..providers.models import PlaceCandidate
@@ -13,6 +20,7 @@ from ..repositories import RecommendationRepository, RouteBookRepository, Workfl
 from ..schemas import (
     ItineraryDaySnapshot,
     PlaceSnapshot,
+    RequirementValue,
     RouteBookSnapshotV1,
     RouteSegmentSnapshot,
     WeatherSnapshot,
@@ -46,6 +54,39 @@ class PlanningPersistenceService:
         ]
         by_provider_id = {item.provider_place_id: item for item in accepted}
         must_ids = set(snapshot.requirements.must_visit_place_ids.value or [])
+        unresolved_must_texts: list[str] = []
+        for text in snapshot.requirements.must_visit_place_texts.value or []:
+            matches = [
+                proposal
+                for proposal in by_provider_id.values()
+                if text == str(proposal.candidate_jsonb.get("name", ""))
+                or text in str(proposal.candidate_jsonb.get("name", ""))
+            ]
+            if len(matches) == 1:
+                candidate = PlaceCandidate.model_validate(matches[0].candidate_jsonb)
+                must_ids.add(planning_place_id(candidate.provider, candidate.provider_place_id))
+            else:
+                unresolved_must_texts.append(text)
+        original_must_ids = set(snapshot.requirements.must_visit_place_ids.value or [])
+        original_must_texts = snapshot.requirements.must_visit_place_texts.value or []
+        if must_ids != original_must_ids or unresolved_must_texts != original_must_texts:
+            requirements = snapshot.requirements.model_copy(
+                update={
+                    "must_visit_place_ids": RequirementValue(
+                        value=sorted(must_ids, key=str),
+                        source=RequirementSource.EXPLICIT,
+                        confidence=1.0,
+                        confirmed=True,
+                    ),
+                    "must_visit_place_texts": RequirementValue(
+                        value=unresolved_must_texts,
+                        source=RequirementSource.EXPLICIT,
+                        confidence=1.0,
+                        confirmed=True,
+                    ),
+                }
+            )
+            snapshot = snapshot.model_copy(update={"requirements": requirements})
         excluded_ids = set(snapshot.requirements.excluded_place_ids.value or [])
         places: list[PlanningPlace] = []
         for proposal in by_provider_id.values():
