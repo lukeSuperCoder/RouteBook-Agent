@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .enums import RouteBookStatus, WorkflowRunType, WorkflowStage, WorkflowStatus
+from .enums import PlanningPhase, RouteBookStatus, WorkflowRunType, WorkflowStage, WorkflowStatus
 from .models import (
     ChangeProposalModel,
     ConversationMessageModel,
@@ -90,6 +90,9 @@ def workflow_run_read(model: WorkflowRunModel) -> WorkflowRunRead:
         result_version_id=model.result_version_id,
         status=WorkflowStatus(model.status),
         current_stage=WorkflowStage(model.current_stage),
+        phase=PlanningPhase(model.phase) if model.phase else None,
+        message=model.status_message,
+        latest_event_id=model.latest_event_id,
         proposal_id=model.proposal_id,
         error_code=model.error_code,
         started_at=model.started_at,

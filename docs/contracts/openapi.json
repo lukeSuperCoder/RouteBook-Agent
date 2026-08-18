@@ -1,6 +1,35 @@
 {
   "components": {
     "schemas": {
+      "AsyncWorkflowAccepted": {
+        "additionalProperties": false,
+        "properties": {
+          "events_url": {
+            "title": "Events Url",
+            "type": "string"
+          },
+          "status_url": {
+            "title": "Status Url",
+            "type": "string"
+          },
+          "workflow_run_id": {
+            "format": "uuid",
+            "title": "Workflow Run Id",
+            "type": "string"
+          },
+          "workflow_status": {
+            "$ref": "#/components/schemas/WorkflowStatus"
+          }
+        },
+        "required": [
+          "workflow_run_id",
+          "workflow_status",
+          "status_url",
+          "events_url"
+        ],
+        "title": "AsyncWorkflowAccepted",
+        "type": "object"
+      },
       "ConversationMessageRead": {
         "additionalProperties": false,
         "properties": {
@@ -364,52 +393,6 @@
         "title": "ItineraryDaySnapshot",
         "type": "object"
       },
-      "ItineraryPlanningRead": {
-        "additionalProperties": false,
-        "properties": {
-          "conflicts": {
-            "items": {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            "title": "Conflicts",
-            "type": "array"
-          },
-          "degraded": {
-            "default": false,
-            "title": "Degraded",
-            "type": "boolean"
-          },
-          "feasible": {
-            "title": "Feasible",
-            "type": "boolean"
-          },
-          "repair_attempts": {
-            "default": 0,
-            "maximum": 3.0,
-            "minimum": 0.0,
-            "title": "Repair Attempts",
-            "type": "integer"
-          },
-          "version_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Version Id"
-          }
-        },
-        "required": [
-          "feasible"
-        ],
-        "title": "ItineraryPlanningRead",
-        "type": "object"
-      },
       "PlaceFeedbackRequest": {
         "additionalProperties": false,
         "properties": {
@@ -532,6 +515,22 @@
         ],
         "title": "PlaceSnapshot",
         "type": "object"
+      },
+      "PlanningPhase": {
+        "enum": [
+          "understanding",
+          "clarifying",
+          "confirming_requirements",
+          "generating_recommendations",
+          "selecting_places",
+          "building_itinerary",
+          "itinerary_ready",
+          "editing",
+          "finalizing",
+          "failed"
+        ],
+        "title": "PlanningPhase",
+        "type": "string"
       },
       "ProposalDecisionRequest": {
         "additionalProperties": false,
@@ -1965,6 +1964,38 @@
             "title": "Id",
             "type": "string"
           },
+          "latest_event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Event Id"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanningPhase"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "proposal_id": {
             "anyOf": [
               {
@@ -2035,7 +2066,9 @@
           "create",
           "edit",
           "refresh",
-          "finalize"
+          "finalize",
+          "recommend",
+          "plan"
         ],
         "title": "WorkflowRunType",
         "type": "string"
@@ -2055,7 +2088,9 @@
           "saving_version",
           "rendering_final_page",
           "completed",
-          "failed"
+          "failed",
+          "generating_recommendations",
+          "selecting_places"
         ],
         "title": "WorkflowStage",
         "type": "string"
@@ -2503,11 +2538,11 @@
           }
         ],
         "responses": {
-          "200": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ItineraryPlanningRead"
+                  "$ref": "#/components/schemas/AsyncWorkflowAccepted"
                 }
               }
             },
@@ -2761,11 +2796,11 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "202": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RecommendationBatchRead"
+                  "$ref": "#/components/schemas/AsyncWorkflowAccepted"
                 }
               }
             },
@@ -3190,6 +3225,53 @@
         ]
       }
     },
+    "/api/routebooks/{routebook_id}/workflow-runs/active": {
+      "get": {
+        "operationId": "active_workflow_runs_api_routebooks__routebook_id__workflow_runs_active_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "routebook_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Routebook Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowRunRead"
+                  },
+                  "title": "Response Active Workflow Runs Api Routebooks  Routebook Id  Workflow Runs Active Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Active Workflow Runs",
+        "tags": [
+          "workflows"
+        ]
+      }
+    },
     "/api/workflow-runs/{run_id}": {
       "get": {
         "operationId": "get_workflow_run_api_workflow_runs__run_id__get",
@@ -3243,6 +3325,49 @@
         ]
       }
     },
+    "/api/workflow-runs/{run_id}/cancel": {
+      "post": {
+        "operationId": "cancel_active_workflow_api_workflow_runs__run_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Active Workflow",
+        "tags": [
+          "workflows"
+        ]
+      }
+    },
     "/api/workflow-runs/{run_id}/events": {
       "get": {
         "operationId": "workflow_events_api_workflow_runs__run_id__events_get",
@@ -3255,6 +3380,22 @@
               "format": "uuid",
               "title": "Run Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Last-Event-ID",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
             }
           }
         ],

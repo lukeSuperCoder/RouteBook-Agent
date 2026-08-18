@@ -29,7 +29,7 @@ def utc_now() -> datetime:
 
 ROUTEBOOK_STATUSES = "'draft','planning','pending_confirmation','editable','blocked','final'"
 WORKFLOW_STATUSES = "'queued','running','interrupted','completed','failed','cancelled'"
-WORKFLOW_TYPES = "'create','edit','refresh','finalize'"
+WORKFLOW_TYPES = "'create','edit','refresh','finalize','recommend','plan'"
 PROPOSAL_STATUSES = "'pending','accepted','rejected','expired'"
 MESSAGE_ROLES = "'user','assistant','system'"
 MESSAGE_KINDS = "'requirement_input','requirement_clarification','status'"
@@ -107,6 +107,9 @@ class WorkflowRunModel(Base):
     )
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="queued")
     current_stage: Mapped[str] = mapped_column(String(48), nullable=False, default="queued")
+    phase: Mapped[str | None] = mapped_column(String(48), nullable=True)
+    status_message: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    latest_event_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     proposal_id: Mapped[UUID | None] = mapped_column(
         ForeignKey(
             f"{SCHEMA}.change_proposals.id",

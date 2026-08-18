@@ -319,26 +319,42 @@ def test_recommendation_api_persists_candidate_and_feedback() -> None:
             selected_count=1,
         ),
     )
+
+    def dispatch_recommendation(run_id: UUID, _request_id: str, _limit: int) -> None:
+        with SessionFactory.begin() as session:
+            run = session.get(WorkflowRunModel, run_id)
+            assert run is not None and run.base_version_id is not None
+            RecommendationPersistenceService.save(
+                session,
+                routebook_id=run.routebook_id,
+                base_version_id=run.base_version_id,
+                result=result,
+            )
+            run.status = WorkflowStatus.COMPLETED.value
+            run.current_stage = WorkflowStage.SELECTING_PLACES.value
+
     app = create_app(
-        lambda _run_id, _request_id: None,
-        lambda _run_id, _message_id, _request_id, _resume: None,
-        lambda _requirements, _limit, _feedback: result,
+        workflow_dispatcher=lambda _run_id, _request_id: None,
+        requirement_dispatcher=lambda _run_id, _message_id, _request_id, _resume: None,
+        recommendation_dispatcher=dispatch_recommendation,
     )
 
     with TestClient(app) as client:
         generated = client.post(
             f"/api/routebooks/{routebook_id}/recommendations", json={"limit": 5}
         )
-        proposal_id = generated.json()["candidates"][0]["id"]
+        latest = client.get(f"/api/routebooks/{routebook_id}/recommendations/latest")
+        proposal_id = latest.json()["candidates"][0]["id"]
         rejected = client.post(
             f"/api/routebooks/{routebook_id}/recommendations/{proposal_id}/feedback",
             json={"action": "reject", "reason": "too_far"},
         )
         metrics = client.get(f"/api/routebooks/{routebook_id}/recommendations/metrics")
 
-    assert generated.status_code == 200
-    assert generated.json()["candidates"][0]["name"] == "南京博物院"
-    assert generated.json()["candidates"][0]["status"] == "proposed"
+    assert generated.status_code == 202
+    assert generated.json()["workflow_status"] == "queued"
+    assert latest.json()["candidates"][0]["name"] == "南京博物院"
+    assert latest.json()["candidates"][0]["status"] == "proposed"
     assert rejected.status_code == 200
     assert rejected.json()["candidates"][0]["status"] == "rejected"
     assert metrics.status_code == 200
@@ -460,9 +476,7 @@ def test_planning_persists_routebook_snapshot_from_accepted_places() -> None:
 
     planner = ItineraryPlanningService(
         route_fetcher=route,
-        weather_fetcher=lambda _location: FactCollection(
-            status=FactStatus.UNAVAILABLE, items=[]
-        ),
+        weather_fetcher=lambda _location: FactCollection(status=FactStatus.UNAVAILABLE, items=[]),
         warning_fetcher=lambda _location: FactCollection[WeatherWarning](
             status=FactStatus.VERIFIED, items=[]
         ),
@@ -487,9 +501,7 @@ def test_planning_persists_routebook_snapshot_from_accepted_places() -> None:
         assert len(final_snapshot.days_plan) == 1
         assert len(final_snapshot.places) == 3
         assert len(final_snapshot.route_segments) == 2
-        assert all(
-            item.status == FactStatus.VERIFIED for item in final_snapshot.route_segments
-        )
+        assert all(item.status == FactStatus.VERIFIED for item in final_snapshot.route_segments)
 
 
 def test_edit_proposal_confirmation_idempotency_and_undo_create_versions() -> None:
@@ -529,9 +541,7 @@ def test_edit_proposal_confirmation_idempotency_and_undo_create_versions() -> No
                     status=FactStatus.VERIFIED,
                 )
             ],
-            days_plan=[
-                ItineraryDaySnapshot(day_number=1, place_ids=[must_id])
-            ],
+            days_plan=[ItineraryDaySnapshot(day_number=1, place_ids=[must_id])],
         )
         version.snapshot_jsonb = snapshot.model_dump(mode="json")
 
@@ -659,9 +669,7 @@ def test_proposal_rejects_acceptance_after_base_version_changes() -> None:
         version.snapshot_jsonb = base_snapshot.model_dump(mode="json")
     with SessionFactory.begin() as session:
         base_id, base = EditingPersistenceService.load_current(session, routebook_id)
-        plan = EditingService().plan(
-            base, EditIntent(operation="change_days", target_days=3)
-        )
+        plan = EditingService().plan(base, EditIntent(operation="change_days", target_days=3))
         pending = EditingPersistenceService.execute(
             session,
             routebook_id=routebook_id,
@@ -692,9 +700,7 @@ def test_proposal_rejects_acceptance_after_base_version_changes() -> None:
             change_summary="concurrent",
         )
     with pytest.raises(VersionConflictError), SessionFactory.begin() as session:
-        EditingPersistenceService.resolve_proposal(
-            session, proposal_id=proposal_id, accept=True
-        )
+        EditingPersistenceService.resolve_proposal(session, proposal_id=proposal_id, accept=True)
 
 
 def test_requirement_resume_requires_interrupted_run_and_is_idempotent() -> None:
@@ -740,11 +746,14 @@ def test_requirement_resume_requires_interrupted_run_and_is_idempotent() -> None
     assert dispatched[0] == dispatched[1]
     assert dispatched[0][2] is True
     with SessionFactory() as session:
-        assert session.scalar(
-            select(func.count())
-            .select_from(ConversationMessageModel)
-            .where(ConversationMessageModel.workflow_run_id == run_id)
-        ) == 1
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(ConversationMessageModel)
+                .where(ConversationMessageModel.workflow_run_id == run_id)
+            )
+            == 1
+        )
 
 
 def test_final_page_stays_bound_to_version_and_redacts_addresses() -> None:
@@ -887,21 +896,30 @@ def test_requirement_worker_interrupts_resumes_and_commits_one_version(monkeypat
         assert snapshot.requirements.start_date.value == date(2026, 9, 1)
         assert snapshot.requirements.days.value == 3
         assert snapshot.requirements.transport_mode.value == "driving"
-        assert session.scalar(
-            select(func.count())
-            .select_from(RouteBookVersionModel)
-            .where(RouteBookVersionModel.workflow_run_id == first.workflow_run_id)
-        ) == 1
-        assert session.scalar(
-            select(func.count())
-            .select_from(LlmCallRecordModel)
-            .where(LlmCallRecordModel.workflow_run_id == first.workflow_run_id)
-        ) == 2
-        assert session.scalar(
-            select(func.count())
-            .select_from(ConversationMessageModel)
-            .where(ConversationMessageModel.workflow_run_id == first.workflow_run_id)
-        ) == 3
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(RouteBookVersionModel)
+                .where(RouteBookVersionModel.workflow_run_id == first.workflow_run_id)
+            )
+            == 1
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(LlmCallRecordModel)
+                .where(LlmCallRecordModel.workflow_run_id == first.workflow_run_id)
+            )
+            == 2
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(ConversationMessageModel)
+                .where(ConversationMessageModel.workflow_run_id == first.workflow_run_id)
+            )
+            == 3
+        )
         system_messages = list(
             session.scalars(
                 select(ConversationMessageModel).where(
@@ -934,6 +952,8 @@ class _IntegrationExtractor:
 
 def _explicit(value):
     return RequirementPatchValue(value=value, source="explicit", confidence=0.99)
+
+
 def _create_routebook_and_run() -> UUID:
     routebook_id = uuid4()
     run_id = uuid4()

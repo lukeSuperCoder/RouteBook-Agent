@@ -11,7 +11,7 @@ from sqlalchemy.exc import OperationalError
 
 from .config import get_settings
 from .db import SessionFactory
-from .enums import ChangeType, WorkflowStage, WorkflowStatus
+from .enums import ChangeType, PlanningPhase, WorkflowStage, WorkflowStatus
 from .errors import AppError
 from .observability import (
     configure_logging,
@@ -69,6 +69,24 @@ def dispatch_requirement_workflow(
         task_id=f"{run_id}:{message_id}",
         headers={"request_id": request_id, "workflow_run_id": str(run_id)},
     )
+
+
+def dispatch_recommendation_workflow(run_id: UUID, request_id: str, limit: int) -> None:
+    celery_app.send_task(
+        "routebook.execute_recommendation_workflow",
+        args=[str(run_id), request_id, limit],
+        task_id=str(run_id),
+    )
+
+
+def dispatch_itinerary_workflow(run_id: UUID, request_id: str) -> None:
+    celery_app.send_task(
+        "routebook.execute_itinerary_workflow", args=[str(run_id), request_id], task_id=str(run_id)
+    )
+
+
+def cancel_workflow(run_id: UUID) -> None:
+    celery_app.control.revoke(str(run_id), terminate=True, signal="SIGTERM")
 
 
 @celery_app.task(  # type: ignore[untyped-decorator]
@@ -163,11 +181,7 @@ def execute_requirement_workflow(
             routebook_id_context.set(str(routebook_id))
             if run.status == WorkflowStatus.COMPLETED.value:
                 return
-            base = (
-                VersionRepository(session).get(base_version_id)
-                if base_version_id
-                else None
-            )
+            base = VersionRepository(session).get(base_version_id) if base_version_id else None
             snapshot = (
                 RouteBookSnapshotV1.model_validate(base.snapshot_jsonb)
                 if base is not None
@@ -307,11 +321,141 @@ def execute_requirement_workflow(
         raise
 
 
+@celery_app.task(name="routebook.execute_recommendation_workflow", acks_late=True)  # type: ignore[untyped-decorator]
+def execute_recommendation_workflow(run_id_text: str, request_id: str, limit: int) -> None:
+    run_id = UUID(run_id_text)
+    publisher = ProgressPublisher(settings.redis_url)
+    try:
+        from .main import _run_recommendations
+        from .recommendations.persistence import RecommendationPersistenceService
+
+        with SessionFactory.begin() as session:
+            run = WorkflowRunRepository(session).get(run_id, for_update=True)
+            if run is None or run.status == WorkflowStatus.CANCELLED.value:
+                return
+            run.status = WorkflowStatus.RUNNING.value
+            run.phase = PlanningPhase.GENERATING_RECOMMENDATIONS.value
+            routebook_id = run.routebook_id
+            base_version_id, snapshot = RecommendationPersistenceService.confirmed_requirements(
+                session, routebook_id
+            )
+            feedback = RecommendationPersistenceService.feedback_history(session, routebook_id)
+        publisher.publish(
+            build_progress_event(
+                run_id=run_id,
+                routebook_id=routebook_id,
+                stage=WorkflowStage.GENERATING_RECOMMENDATIONS,
+                status=WorkflowStatus.RUNNING,
+                message="正在搜索并评估候选地点",
+                completed=0,
+                total=2,
+            )
+        )
+        result = _run_recommendations(snapshot.requirements, limit, feedback)
+        with SessionFactory.begin() as session:
+            run = WorkflowRunRepository(session).get(run_id, for_update=True)
+            if run is None or run.status == WorkflowStatus.CANCELLED.value:
+                return
+            RecommendationPersistenceService.save(
+                session, routebook_id=routebook_id, base_version_id=base_version_id, result=result
+            )
+            run.phase = PlanningPhase.SELECTING_PLACES.value
+        publisher.publish(
+            build_progress_event(
+                run_id=run_id,
+                routebook_id=routebook_id,
+                stage=WorkflowStage.SELECTING_PLACES,
+                status=WorkflowStatus.COMPLETED,
+                message="地点推荐已生成，请选择想去的地点",
+                completed=2,
+                total=2,
+            )
+        )
+    except Exception:
+        log.exception("recommendation workflow failed")
+        _mark_failed(run_id, "RECOMMENDATION_FAILED", publisher)
+        raise
+
+
+@celery_app.task(name="routebook.execute_itinerary_workflow", acks_late=True)  # type: ignore[untyped-decorator]
+def execute_itinerary_workflow(run_id_text: str, request_id: str) -> None:
+    run_id = UUID(run_id_text)
+    publisher = ProgressPublisher(settings.redis_url)
+    try:
+        from .main import _run_itinerary
+        from .planning.persistence import PlanningPersistenceService
+
+        with SessionFactory.begin() as session:
+            run = WorkflowRunRepository(session).get(run_id, for_update=True)
+            if run is None or run.status == WorkflowStatus.CANCELLED.value:
+                return
+            run.status = WorkflowStatus.RUNNING.value
+            run.phase = PlanningPhase.BUILDING_ITINERARY.value
+            routebook_id = run.routebook_id
+            base_version_id, snapshot, places = PlanningPersistenceService.load_input(
+                session, routebook_id
+            )
+        publisher.publish(
+            build_progress_event(
+                run_id=run_id,
+                routebook_id=routebook_id,
+                stage=WorkflowStage.PLANNING_DAYS,
+                status=WorkflowStatus.RUNNING,
+                message="正在编排分日行程",
+                completed=0,
+                total=3,
+            )
+        )
+        result = _run_itinerary(snapshot.requirements, places)
+        if not result.feasible or result.draft is None:
+            raise RuntimeError("itinerary infeasible")
+        publisher.publish(
+            build_progress_event(
+                run_id=run_id,
+                routebook_id=routebook_id,
+                stage=WorkflowStage.VALIDATING,
+                status=WorkflowStatus.RUNNING,
+                message="正在验证路线与时间约束",
+                completed=2,
+                total=3,
+            )
+        )
+        with SessionFactory.begin() as session:
+            run = WorkflowRunRepository(session).get(run_id, for_update=True)
+            if run is None or run.status == WorkflowStatus.CANCELLED.value:
+                return
+            PlanningPersistenceService.commit(
+                session,
+                routebook_id=routebook_id,
+                base_version_id=base_version_id,
+                base_snapshot=snapshot,
+                result=result,
+                workflow_run_id=run_id,
+            )
+            run.phase = PlanningPhase.ITINERARY_READY.value
+        publisher.publish(
+            build_progress_event(
+                run_id=run_id,
+                routebook_id=routebook_id,
+                stage=WorkflowStage.COMPLETED,
+                status=WorkflowStatus.COMPLETED,
+                message="完整行程已生成",
+                completed=3,
+                total=3,
+            )
+        )
+    except Exception:
+        log.exception("itinerary workflow failed")
+        _mark_failed(run_id, "ITINERARY_FAILED", publisher)
+        raise
+
+
 def _mark_failed(run_id: UUID, error_code: str, publisher: ProgressPublisher) -> None:
     try:
         with SessionFactory.begin() as session:
             run = WorkflowService.mark_failed(session, run_id, error_code)
             routebook_id = run.routebook_id
+            run.phase = PlanningPhase.FAILED.value
         publisher.publish(
             build_progress_event(
                 run_id=run_id,

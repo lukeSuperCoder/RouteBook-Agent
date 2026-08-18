@@ -119,6 +119,7 @@ class PlanningPersistenceService:
         base_version_id: UUID,
         base_snapshot: RouteBookSnapshotV1,
         result: PlanningResult,
+        workflow_run_id: UUID | None = None,
     ) -> UUID:
         if not result.feasible or result.draft is None:
             raise WorkflowStateConflictError(
@@ -130,15 +131,20 @@ class PlanningPersistenceService:
         routebook = RouteBookRepository(session).get(routebook_id, for_update=True)
         if routebook is None:
             raise NotFoundError(details={"resource": "routebook"})
-        run = WorkflowRunModel(
-            routebook_id=routebook_id,
-            run_type=WorkflowRunType.CREATE.value,
-            base_version_id=base_version_id,
-            status=WorkflowStatus.RUNNING.value,
-            current_stage=WorkflowStage.VALIDATING.value,
+        run = (
+            WorkflowRunRepository(session).get(workflow_run_id, for_update=True)
+            if workflow_run_id else None
         )
-        WorkflowRunRepository(session).add(run)
-        session.flush()
+        if run is None:
+            run = WorkflowRunModel(
+                routebook_id=routebook_id,
+                run_type=WorkflowRunType.CREATE.value,
+                base_version_id=base_version_id,
+                status=WorkflowStatus.RUNNING.value,
+                current_stage=WorkflowStage.VALIDATING.value,
+            )
+            WorkflowRunRepository(session).add(run)
+            session.flush()
         draft = result.draft
         all_places = [place for day in draft.days for place in day.places]
         snapshot = base_snapshot.model_copy(
@@ -196,5 +202,6 @@ class PlanningPersistenceService:
             change_summary="生成分日行程、正式路线与天气草稿",
         )
         routebook.status = RouteBookStatus.EDITABLE.value
+        run.result_version_id = version.id
         session.flush()
         return version.id

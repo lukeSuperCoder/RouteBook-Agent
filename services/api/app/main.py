@@ -25,14 +25,16 @@ from .editing.graph import invoke_editing_subgraph
 from .editing.models import EditIntent, ImpactScope
 from .editing.persistence import EditingPersistenceService
 from .editing.recompute import AffectedScopeRecomputer
-from .enums import RouteBookStatus, WorkflowStage, WorkflowStatus
+from .enums import PlanningPhase, RouteBookStatus, WorkflowRunType, WorkflowStage, WorkflowStatus
 from .errors import (
     AppError,
     DependencyUnavailableError,
     NotFoundError,
     ValidationAppError,
+    WorkflowStateConflictError,
 )
 from .finalization import FinalizationService
+from .models import WorkflowRunModel, utc_now
 from .observability import configure_logging, request_id_context
 from .planning.graph import invoke_itinerary_planning_subgraph
 from .planning.models import PlanningPlace, PlanningResult
@@ -62,6 +64,7 @@ from .repositories import (
     WorkflowRunRepository,
 )
 from .schemas import (
+    AsyncWorkflowAccepted,
     ConversationMessageRead,
     CreateRouteBookRequest,
     EditExecutionRead,
@@ -69,7 +72,6 @@ from .schemas import (
     FinalizeRouteBookRead,
     FinalizeRouteBookRequest,
     HealthResponse,
-    ItineraryPlanningRead,
     PlaceFeedbackRequest,
     ProposalDecisionRequest,
     ProposalRead,
@@ -96,13 +98,21 @@ from .services import (
     RouteBookService,
     canonical_request_hash,
 )
-from .worker import dispatch_requirement_workflow, dispatch_workflow
+from .worker import (
+    cancel_workflow,
+    dispatch_itinerary_workflow,
+    dispatch_recommendation_workflow,
+    dispatch_requirement_workflow,
+    dispatch_workflow,
+)
 
 settings = get_settings()
 log = logging.getLogger("routebook.api")
 IDEMPOTENCY_KEY_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{8,128}$")
 WorkflowDispatcher = Callable[[UUID, str], None]
 RequirementWorkflowDispatcher = Callable[[UUID, UUID, str, bool], None]
+RecommendationWorkflowDispatcher = Callable[[UUID, str, int], None]
+ItineraryWorkflowDispatcher = Callable[[UUID, str], None]
 RecommendationRunner = Callable[
     [RequirementSnapshot, int, list[PlaceFeedback]], RecommendationResult
 ]
@@ -173,6 +183,8 @@ def create_app(
     recommendation_runner: RecommendationRunner = _run_recommendations,
     itinerary_runner: ItineraryRunner = _run_itinerary,
     edit_recompute_runner: EditRecomputeRunner = _recompute_edit_scope,
+    recommendation_dispatcher: RecommendationWorkflowDispatcher = dispatch_recommendation_workflow,
+    itinerary_dispatcher: ItineraryWorkflowDispatcher = dispatch_itinerary_workflow,
 ) -> FastAPI:
     app = FastAPI(
         title="RouteBook Agent API",
@@ -183,6 +195,8 @@ def create_app(
     app.state.requirement_dispatcher = requirement_dispatcher
     app.state.recommendation_runner = recommendation_runner
     app.state.itinerary_runner = itinerary_runner
+    app.state.recommendation_dispatcher = recommendation_dispatcher
+    app.state.itinerary_dispatcher = itinerary_dispatcher
     app.state.edit_recompute_runner = edit_recompute_runner
     app.add_middleware(
         CORSMiddleware,
@@ -448,13 +462,28 @@ def create_app(
     @app.get("/api/workflow-runs/{run_id}/events", tags=["workflows"])
     def workflow_events(
         run_id: UUID,
+        last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
         session: Session = Depends(get_session),
         _principal: RequestPrincipal = Depends(get_request_principal),
     ) -> StreamingResponse:
-        if WorkflowRunRepository(session).get(run_id) is None:
+        run = WorkflowRunRepository(session).get(run_id)
+        if run is None:
             raise NotFoundError(details={"resource": "workflow_run"})
+        snapshot = build_progress_event(
+            run_id=run.id,
+            routebook_id=run.routebook_id,
+            stage=WorkflowStage(run.current_stage),
+            status=WorkflowStatus(run.status),
+            message=run.status_message or "工作流状态已恢复",
+            completed=1 if run.status != WorkflowStatus.QUEUED.value else 0,
+            total=1,
+        )
+        if run.latest_event_id:
+            snapshot = snapshot.model_copy(update={"event_id": UUID(run.latest_event_id)})
         return StreamingResponse(
-            stream_progress(settings.redis_url, run_id),
+            stream_progress(
+                settings.redis_url, run_id, last_event_id=last_event_id, snapshot=snapshot
+            ),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
@@ -462,6 +491,54 @@ def create_app(
                 "X-Accel-Buffering": "no",
             },
         )
+
+    @app.get(
+        "/api/routebooks/{routebook_id}/workflow-runs/active",
+        response_model=list[WorkflowRunRead],
+        tags=["workflows"],
+    )
+    def active_workflow_runs(
+        routebook_id: UUID,
+        session: Session = Depends(get_session),
+        _principal: RequestPrincipal = Depends(get_request_principal),
+    ) -> list[WorkflowRunRead]:
+        if RouteBookRepository(session).get(routebook_id) is None:
+            raise NotFoundError(details={"resource": "routebook"})
+        return [
+            workflow_run_read(run)
+            for run in WorkflowRunRepository(session).active_for_routebook(routebook_id)
+        ]
+
+    @app.post(
+        "/api/workflow-runs/{run_id}/cancel", response_model=WorkflowRunRead, tags=["workflows"]
+    )
+    def cancel_active_workflow(
+        run_id: UUID,
+        session: Session = Depends(get_session),
+        _principal: RequestPrincipal = Depends(get_request_principal),
+    ) -> WorkflowRunRead:
+        with session.begin():
+            run = WorkflowRunRepository(session).get(run_id, for_update=True)
+            if run is None:
+                raise NotFoundError(details={"resource": "workflow_run"})
+            if run.status not in {WorkflowStatus.QUEUED.value, WorkflowStatus.RUNNING.value}:
+                raise WorkflowStateConflictError(details={"status": run.status})
+            run.status = WorkflowStatus.CANCELLED.value
+            run.status_message = "任务已取消"
+            run.completed_at = utc_now()
+        cancel_workflow(run_id)
+        ProgressPublisher(settings.redis_url).publish(
+            build_progress_event(
+                run_id=run.id,
+                routebook_id=run.routebook_id,
+                stage=WorkflowStage(run.current_stage),
+                status=WorkflowStatus.CANCELLED,
+                message="任务已取消",
+                completed=0,
+                total=1,
+            )
+        )
+        return workflow_run_read(run)
 
     @app.post(
         "/api/workflow-runs/{run_id}/resume",
@@ -496,30 +573,45 @@ def create_app(
 
     @app.post(
         "/api/routebooks/{routebook_id}/recommendations",
-        response_model=RecommendationBatchRead,
+        response_model=AsyncWorkflowAccepted,
+        status_code=202,
         responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
         tags=["recommendations"],
     )
     def generate_recommendations(
         routebook_id: UUID,
         payload: RecommendationGenerateRequest,
+        request: Request,
         session: Session = Depends(get_session),
         _principal: RequestPrincipal = Depends(get_request_principal),
-    ) -> RecommendationBatchRead:
+    ) -> AsyncWorkflowAccepted:
         with session.begin():
-            base_version_id, snapshot = RecommendationPersistenceService.confirmed_requirements(
+            base_version_id, _ = RecommendationPersistenceService.confirmed_requirements(
                 session, routebook_id
             )
-            feedback = RecommendationPersistenceService.feedback_history(session, routebook_id)
-        result = app.state.recommendation_runner(snapshot.requirements, payload.limit, feedback)
-        with session.begin():
-            batch = RecommendationPersistenceService.save(
-                session,
+            if any(
+                item.run_type in {WorkflowRunType.RECOMMEND.value, WorkflowRunType.PLAN.value}
+                for item in WorkflowRunRepository(session).active_for_routebook(routebook_id)
+            ):
+                raise WorkflowStateConflictError(details={"reason": "workflow_already_active"})
+            run = WorkflowRunModel(
                 routebook_id=routebook_id,
+                run_type=WorkflowRunType.RECOMMEND.value,
                 base_version_id=base_version_id,
-                result=result,
+                status=WorkflowStatus.QUEUED.value,
+                current_stage=WorkflowStage.QUEUED.value,
+                phase=PlanningPhase.GENERATING_RECOMMENDATIONS.value,
+                status_message="推荐任务已进入队列",
             )
-        return present_batch(batch, RecommendationRepository(session).list_proposals(batch.id))
+            WorkflowRunRepository(session).add(run)
+            session.flush()
+        request.app.state.recommendation_dispatcher(run.id, request.state.request_id, payload.limit)
+        return AsyncWorkflowAccepted(
+            workflow_run_id=run.id,
+            workflow_status=WorkflowStatus.QUEUED,
+            status_url=f"/api/workflow-runs/{run.id}",
+            events_url=f"/api/workflow-runs/{run.id}/events",
+        )
 
     @app.get(
         "/api/routebooks/{routebook_id}/recommendations/latest",
@@ -598,38 +690,41 @@ def create_app(
 
     @app.post(
         "/api/routebooks/{routebook_id}/itinerary",
-        response_model=ItineraryPlanningRead,
+        response_model=AsyncWorkflowAccepted,
+        status_code=202,
         responses={404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
         tags=["planning"],
     )
     def generate_itinerary(
         routebook_id: UUID,
+        request: Request,
         session: Session = Depends(get_session),
         _principal: RequestPrincipal = Depends(get_request_principal),
-    ) -> ItineraryPlanningRead:
+    ) -> AsyncWorkflowAccepted:
         with session.begin():
-            base_version_id, snapshot, places = PlanningPersistenceService.load_input(
-                session, routebook_id
-            )
-        result = app.state.itinerary_runner(snapshot.requirements, places)
-        if not result.feasible or result.draft is None:
-            return ItineraryPlanningRead(
-                feasible=False,
-                conflicts=[item.model_dump(mode="json") for item in result.conflicts],
-            )
-        with session.begin():
-            version_id = PlanningPersistenceService.commit(
-                session,
+            base_version_id, _, _ = PlanningPersistenceService.load_input(session, routebook_id)
+            if any(
+                item.run_type in {WorkflowRunType.RECOMMEND.value, WorkflowRunType.PLAN.value}
+                for item in WorkflowRunRepository(session).active_for_routebook(routebook_id)
+            ):
+                raise WorkflowStateConflictError(details={"reason": "workflow_already_active"})
+            run = WorkflowRunModel(
                 routebook_id=routebook_id,
+                run_type=WorkflowRunType.PLAN.value,
                 base_version_id=base_version_id,
-                base_snapshot=snapshot,
-                result=result,
+                status=WorkflowStatus.QUEUED.value,
+                current_stage=WorkflowStage.QUEUED.value,
+                phase=PlanningPhase.BUILDING_ITINERARY.value,
+                status_message="行程任务已进入队列",
             )
-        return ItineraryPlanningRead(
-            feasible=True,
-            version_id=version_id,
-            repair_attempts=result.draft.repair_attempts,
-            degraded=result.draft.degraded,
+            WorkflowRunRepository(session).add(run)
+            session.flush()
+        request.app.state.itinerary_dispatcher(run.id, request.state.request_id)
+        return AsyncWorkflowAccepted(
+            workflow_run_id=run.id,
+            workflow_status=WorkflowStatus.QUEUED,
+            status_url=f"/api/workflow-runs/{run.id}",
+            events_url=f"/api/workflow-runs/{run.id}/events",
         )
 
     @app.post(

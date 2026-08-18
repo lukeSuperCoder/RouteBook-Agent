@@ -24,6 +24,8 @@ class WorkflowRunType(StrEnum):
     EDIT = "edit"
     REFRESH = "refresh"
     FINALIZE = "finalize"
+    RECOMMEND = "recommend"
+    PLAN = "plan"
 
 
 class WorkflowStage(StrEnum):
@@ -40,6 +42,21 @@ class WorkflowStage(StrEnum):
     SAVING_VERSION = "saving_version"
     RENDERING_FINAL_PAGE = "rendering_final_page"
     COMPLETED = "completed"
+    FAILED = "failed"
+    GENERATING_RECOMMENDATIONS = "generating_recommendations"
+    SELECTING_PLACES = "selecting_places"
+
+
+class PlanningPhase(StrEnum):
+    UNDERSTANDING = "understanding"
+    CLARIFYING = "clarifying"
+    CONFIRMING_REQUIREMENTS = "confirming_requirements"
+    GENERATING_RECOMMENDATIONS = "generating_recommendations"
+    SELECTING_PLACES = "selecting_places"
+    BUILDING_ITINERARY = "building_itinerary"
+    ITINERARY_READY = "itinerary_ready"
+    EDITING = "editing"
+    FINALIZING = "finalizing"
     FAILED = "failed"
 
 

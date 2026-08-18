@@ -5,6 +5,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .enums import WorkflowStatus
 from .models import (
     ChangeProposalModel,
     ConversationMessageModel,
@@ -45,6 +46,24 @@ class WorkflowRunRepository:
         if for_update:
             statement = statement.with_for_update()
         return self.session.scalar(statement)
+
+    def active_for_routebook(self, routebook_id: UUID) -> list[WorkflowRunModel]:
+        return list(
+            self.session.scalars(
+                select(WorkflowRunModel)
+                .where(
+                    WorkflowRunModel.routebook_id == routebook_id,
+                    WorkflowRunModel.status.in_(
+                        [
+                            WorkflowStatus.QUEUED.value,
+                            WorkflowStatus.RUNNING.value,
+                            WorkflowStatus.INTERRUPTED.value,
+                        ]
+                    ),
+                )
+                .order_by(WorkflowRunModel.created_at.desc())
+            )
+        )
 
 
 class VersionRepository:

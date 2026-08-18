@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 
 from .enums import (
     FactStatus,
+    PlanningPhase,
     ProposalStatus,
     RequirementSource,
     RouteBookStatus,
@@ -30,10 +31,12 @@ class RequirementValue(ApiModel, Generic[T]):
     source: RequirementSource = RequirementSource.MISSING
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     confirmed: bool = False
-    decision_status: Literal["missing", "suggested", "confirmed", "skipped", "conflicted"] = "missing"
+    decision_status: Literal["missing", "suggested", "confirmed", "skipped", "conflicted"] = (
+        "missing"
+    )
 
     @model_validator(mode="after")
-    def derive_decision_status(self) -> "RequirementValue[T]":
+    def derive_decision_status(self) -> RequirementValue[T]:
         if self.decision_status == "missing" and self.value is not None:
             self.decision_status = "confirmed" if self.confirmed else "suggested"
         return self
@@ -183,6 +186,9 @@ class WorkflowRunRead(ApiModel):
     result_version_id: UUID | None
     status: WorkflowStatus
     current_stage: WorkflowStage
+    phase: PlanningPhase | None = None
+    message: str | None = None
+    latest_event_id: str | None = None
     proposal_id: UUID | None
     error_code: str | None
     started_at: datetime | None
@@ -217,6 +223,13 @@ class RequirementWorkflowAccepted(ApiModel):
     workflow_run_id: UUID
     workflow_status: WorkflowStatus
     reused: bool
+    status_url: str
+    events_url: str
+
+
+class AsyncWorkflowAccepted(ApiModel):
+    workflow_run_id: UUID
+    workflow_status: WorkflowStatus
     status_url: str
     events_url: str
 
