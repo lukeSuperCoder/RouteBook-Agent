@@ -5,6 +5,7 @@ export interface RequirementValue<T> {
   source: string;
   confidence: number;
   confirmed: boolean;
+  decision_status?: "missing" | "suggested" | "confirmed" | "skipped" | "conflicted";
 }
 
 export interface RouteBookSnapshot {

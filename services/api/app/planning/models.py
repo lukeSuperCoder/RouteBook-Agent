@@ -58,7 +58,9 @@ class PlannedSegment(PlanningModel):
     id: UUID
     origin_place_id: UUID
     destination_place_id: UUID
-    mode: Literal["driving", "walking"]
+    mode: Literal[
+        "driving", "walking", "public_transit", "taxi", "cycling", "mixed", "system_decides"
+    ]
     distance_meters: int | None = Field(default=None, ge=0)
     duration_seconds: int | None = Field(default=None, ge=0)
     provider: str | None = None
@@ -68,7 +70,7 @@ class PlannedSegment(PlanningModel):
 
 class PlannedDay(PlanningModel):
     day_number: int = Field(ge=1, le=7)
-    date: date
+    date: date | None
     places: list[PlanningPlace]
     segments: list[PlannedSegment]
     capacity: DailyCapacity

@@ -881,6 +881,9 @@
           "crowd_tolerance": {
             "$ref": "#/components/schemas/RequirementValue_str_"
           },
+          "date_precision": {
+            "$ref": "#/components/schemas/RequirementValue_str_"
+          },
           "days": {
             "$ref": "#/components/schemas/RequirementValue_int_"
           },
@@ -926,6 +929,12 @@
           "transport_mode": {
             "$ref": "#/components/schemas/RequirementValue_str_"
           },
+          "travel_month": {
+            "$ref": "#/components/schemas/RequirementValue_int_"
+          },
+          "trip_scope": {
+            "$ref": "#/components/schemas/RequirementValue_str_"
+          },
           "visited_place_ids": {
             "$ref": "#/components/schemas/RequirementValue_list_UUID__"
           },
@@ -961,6 +970,18 @@
             "title": "Confirmed",
             "type": "boolean"
           },
+          "decision_status": {
+            "default": "missing",
+            "enum": [
+              "missing",
+              "suggested",
+              "confirmed",
+              "skipped",
+              "conflicted"
+            ],
+            "title": "Decision Status",
+            "type": "string"
+          },
           "source": {
             "$ref": "#/components/schemas/RequirementSource",
             "default": "missing"
@@ -994,6 +1015,18 @@
             "default": false,
             "title": "Confirmed",
             "type": "boolean"
+          },
+          "decision_status": {
+            "default": "missing",
+            "enum": [
+              "missing",
+              "suggested",
+              "confirmed",
+              "skipped",
+              "conflicted"
+            ],
+            "title": "Decision Status",
+            "type": "string"
           },
           "source": {
             "$ref": "#/components/schemas/RequirementSource",
@@ -1030,6 +1063,18 @@
             "title": "Confirmed",
             "type": "boolean"
           },
+          "decision_status": {
+            "default": "missing",
+            "enum": [
+              "missing",
+              "suggested",
+              "confirmed",
+              "skipped",
+              "conflicted"
+            ],
+            "title": "Decision Status",
+            "type": "string"
+          },
           "source": {
             "$ref": "#/components/schemas/RequirementSource",
             "default": "missing"
@@ -1063,6 +1108,18 @@
             "default": false,
             "title": "Confirmed",
             "type": "boolean"
+          },
+          "decision_status": {
+            "default": "missing",
+            "enum": [
+              "missing",
+              "suggested",
+              "confirmed",
+              "skipped",
+              "conflicted"
+            ],
+            "title": "Decision Status",
+            "type": "string"
           },
           "source": {
             "$ref": "#/components/schemas/RequirementSource",
@@ -1102,6 +1159,18 @@
             "title": "Confirmed",
             "type": "boolean"
           },
+          "decision_status": {
+            "default": "missing",
+            "enum": [
+              "missing",
+              "suggested",
+              "confirmed",
+              "skipped",
+              "conflicted"
+            ],
+            "title": "Decision Status",
+            "type": "string"
+          },
           "source": {
             "$ref": "#/components/schemas/RequirementSource",
             "default": "missing"
@@ -1138,6 +1207,18 @@
             "default": false,
             "title": "Confirmed",
             "type": "boolean"
+          },
+          "decision_status": {
+            "default": "missing",
+            "enum": [
+              "missing",
+              "suggested",
+              "confirmed",
+              "skipped",
+              "conflicted"
+            ],
+            "title": "Decision Status",
+            "type": "string"
           },
           "source": {
             "$ref": "#/components/schemas/RequirementSource",

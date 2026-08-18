@@ -188,6 +188,17 @@ class ItineraryPlanningService:
         mode = requirements.transport_mode.value or "driving"
         segments: list[PlannedSegment] = []
         for left, right in zip(ordered, ordered[1:], strict=False):
+            if mode not in {"driving", "walking"}:
+                segments.append(
+                    PlannedSegment(
+                        id=uuid4(),
+                        origin_place_id=left.id,
+                        destination_place_id=right.id,
+                        mode=mode,
+                        status=FactStatus.UNVERIFIED,
+                    )
+                )
+                continue
             try:
                 route = self._route_fetcher(
                     left.candidate.coordinate, right.candidate.coordinate, mode
@@ -216,12 +227,11 @@ class ItineraryPlanningService:
                     )
                 )
         start = requirements.start_date.value
-        assert start is not None
         from .models import DailyCapacity
 
         return PlannedDay(
             day_number=number,
-            date=start + timedelta(days=number - 1),
+            date=start + timedelta(days=number - 1) if start is not None else None,
             places=ordered,
             segments=segments,
             capacity=DailyCapacity.model_validate(capacity),
@@ -337,7 +347,7 @@ class ItineraryPlanningService:
     def _fetch_weather(
         self, days: list[PlannedDay]
     ) -> tuple[list[WeatherFact], list[dict[str, object]], bool]:
-        anchors = [(day, day.places[0]) for day in days if day.places]
+        anchors = [(day, day.places[0]) for day in days if day.places and day.date is not None]
         weather: list[WeatherFact] = []
         warnings: list[dict[str, object]] = []
         degraded = False

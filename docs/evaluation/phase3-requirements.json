@@ -32,7 +32,7 @@
       },
       "expect": {
         "ready": false,
-        "issue_codes": ["missing_origin", "missing_start_date", "missing_transport_mode"],
+        "issue_codes": ["missing_trip_scope", "missing_start_date", "missing_transport_mode"],
         "conflict_reasons": []
       }
     },
@@ -93,7 +93,7 @@
       "expect": {
         "ready": false,
         "issue_codes": [
-          "missing_origin",
+          "missing_trip_scope",
           "missing_start_date",
           "missing_days",
           "missing_transport_mode",

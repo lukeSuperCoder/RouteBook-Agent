@@ -30,11 +30,21 @@ class RequirementValue(ApiModel, Generic[T]):
     source: RequirementSource = RequirementSource.MISSING
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
     confirmed: bool = False
+    decision_status: Literal["missing", "suggested", "confirmed", "skipped", "conflicted"] = "missing"
+
+    @model_validator(mode="after")
+    def derive_decision_status(self) -> "RequirementValue[T]":
+        if self.decision_status == "missing" and self.value is not None:
+            self.decision_status = "confirmed" if self.confirmed else "suggested"
+        return self
 
 
 class RequirementSnapshot(ApiModel):
+    trip_scope: RequirementValue[str] = Field(default_factory=RequirementValue[str])
     origin: RequirementValue[str] = Field(default_factory=RequirementValue[str])
     destination: RequirementValue[str] = Field(default_factory=RequirementValue[str])
+    date_precision: RequirementValue[str] = Field(default_factory=RequirementValue[str])
+    travel_month: RequirementValue[int] = Field(default_factory=RequirementValue[int])
     start_date: RequirementValue[Date] = Field(default_factory=RequirementValue[Date])
     days: RequirementValue[int] = Field(default_factory=RequirementValue[int])
     transport_mode: RequirementValue[str] = Field(default_factory=RequirementValue[str])

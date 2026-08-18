@@ -160,10 +160,49 @@ def test_clarification_is_limited_to_three_blocking_questions() -> None:
     assert len(decision.blocking_issues) == 5
     assert len(decision.questions) == 3
     assert [question.issue_code for question in decision.questions] == [
-        "missing_origin",
+        "missing_trip_scope",
         "missing_start_date",
         "missing_days",
     ]
+    assert decision.questions[0].input_type == "single_choice"
+    assert len(decision.questions[0].options) == 2
+
+
+def test_destination_only_month_plan_does_not_require_origin_or_exact_date() -> None:
+    decision = RequirementService(today=TODAY).apply(
+        RequirementSnapshot(),
+        RequirementPatch(
+            trip_scope=explicit("destination_only"),
+            destination=explicit("北京"),
+            date_precision=explicit("month_only"),
+            travel_month=explicit(9),
+            days=explicit(3),
+            transport_mode=explicit("public_transit"),
+        ),
+    )
+
+    assert decision.ready is True
+    assert decision.snapshot.origin.value is None
+    assert decision.snapshot.start_date.value is None
+    assert decision.snapshot.trip_scope.decision_status == "confirmed"
+    assert decision.snapshot.intensity.decision_status == "suggested"
+
+
+def test_flexible_date_question_can_be_skipped_explicitly() -> None:
+    decision = RequirementService(today=TODAY).apply(
+        RequirementSnapshot(),
+        RequirementPatch(
+            trip_scope=explicit("destination_only"),
+            destination=explicit("北京"),
+            days=explicit(3),
+            transport_mode=explicit("system_decides"),
+        ),
+    )
+
+    date_question = next(item for item in decision.questions if item.issue_code == "missing_start_date")
+    assert date_question.input_type == "date"
+    assert date_question.allow_skip is True
+    assert date_question.skip_label == "日期暂未确定"
 
 
 def test_requirement_graph_interrupts_then_resumes_from_same_thread() -> None:

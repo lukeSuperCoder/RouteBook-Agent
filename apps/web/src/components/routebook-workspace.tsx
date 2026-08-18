@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
-import { AmapMap } from "@/components/amap-map";
 import {
   type ConversationMessage,
   type FactStatus,
@@ -14,6 +14,50 @@ import {
   type RouteBookSnapshot,
   routeBookApi,
 } from "@/lib/api";
+
+const AmapMap = dynamic(
+  () => import("@/components/amap-map").then((module) => module.AmapMap),
+  { ssr: false, loading: () => <p className="map-loading" role="status">正在准备地图…</p> },
+);
+
+type PlanningPhase =
+  | "understanding"
+  | "clarifying"
+  | "confirming_requirements"
+  | "selecting_places"
+  | "building_itinerary"
+  | "itinerary_ready"
+  | "editing"
+  | "failed";
+
+type OptimisticMessage = {
+  id: string;
+  text: string;
+  status: "sending" | "failed";
+};
+
+type ClarificationQuestion = {
+  question_id: string;
+  issue_code: string;
+  fields: string[];
+  prompt: string;
+  input_type?: "single_choice" | "multi_choice" | "date" | "text";
+  required?: boolean;
+  options?: Array<{ value: string; label: string; description?: string | null }>;
+  allow_skip?: boolean;
+  skip_label?: string | null;
+};
+
+const phaseCopy: Record<PlanningPhase, { eyebrow: string; title: string; description: string }> = {
+  understanding: { eyebrow: "UNDERSTANDING", title: "正在理解你的旅行", description: "我会先整理已经明确的条件，再找出真正影响路线的问题。" },
+  clarifying: { eyebrow: "CLARIFYING", title: "先确认几个关键条件", description: "补齐这些信息后，地点推荐和路线安排会更可靠。" },
+  confirming_requirements: { eyebrow: "REQUIREMENTS", title: "核对旅行需求", description: "当前条件已经足够开始推荐，你仍可以继续补充偏好。" },
+  selecting_places: { eyebrow: "PLACE SELECTION", title: "选择想去的地方", description: "接受、排除或替换候选，系统会根据你的反馈继续收敛。" },
+  building_itinerary: { eyebrow: "ROUTE BUILDING", title: "正在编排行程", description: "系统正在组合日期、地点和交通约束，并检查路线是否走得通。" },
+  itinerary_ready: { eyebrow: "ITINERARY READY", title: "完整路线已生成", description: "按天查看路线，也可以打开地图检查空间关系。" },
+  editing: { eyebrow: "PROPOSAL", title: "检查本次调整", description: "当前展示的是修改预览，确认后才会写入正式版本。" },
+  failed: { eyebrow: "NEEDS ATTENTION", title: "这一步没有完成", description: "保留现有内容，你可以重试或换一种说法继续。" },
+};
 
 const statusCopy: Record<FactStatus, string> = {
   verified: "已验证",
@@ -47,6 +91,25 @@ function requirementText(snapshot: RouteBookSnapshot | null, key: string): strin
   return value == null || value === "" ? "未设置" : String(value);
 }
 
+function requirementStatus(snapshot: RouteBookSnapshot | null, key: string): { label: string; className: string } {
+  const field = snapshot?.requirements[key];
+  const status = field?.decision_status ?? (field?.confirmed ? "confirmed" : field?.value == null ? "missing" : "suggested");
+  const labels = { missing: "待补充", suggested: "系统建议", confirmed: "已确认", skipped: "已跳过", conflicted: "有冲突" };
+  return { label: labels[status], className: status };
+}
+
+function clarificationQuestions(messages: ConversationMessage[]): ClarificationQuestion[] {
+  const latest = [...messages].reverse().find((message) =>
+    message.role === "assistant" && message.kind === "requirement_clarification",
+  );
+  if (!latest || !Array.isArray(latest.payload.questions)) return [];
+  return latest.payload.questions.filter((question): question is ClarificationQuestion => {
+    if (typeof question !== "object" || question === null) return false;
+    const candidate = question as Partial<ClarificationQuestion>;
+    return typeof candidate.question_id === "string" && typeof candidate.prompt === "string";
+  });
+}
+
 export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId: string | null }) {
   const [routebookId, setRoutebookId] = useState(initialRouteBookId);
   const [routebook, setRoutebook] = useState<RouteBook | null>(null);
@@ -63,6 +126,11 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
   const [progress, setProgress] = useState<ProgressEvent | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [optimisticMessages, setOptimisticMessages] = useState<OptimisticMessage[]>([]);
+  const [mapOpen, setMapOpen] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const mapDialogRef = useRef<HTMLDialogElement>(null);
+  const mapTriggerRef = useRef<HTMLButtonElement>(null);
 
   const refresh = useCallback(async (id: string) => {
     const [book, thread, changes, history, latestRecommendations] = await Promise.all([
@@ -126,6 +194,17 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
     return () => source.close();
   }, [refresh, routebookId, runId]);
 
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView?.({ block: "end", behavior: "smooth" });
+  }, [messages, optimisticMessages, progress?.message]);
+
+  useEffect(() => {
+    const dialog = mapDialogRef.current;
+    if (!dialog) return;
+    if (mapOpen && !dialog.open) dialog.showModal();
+    if (!mapOpen && dialog.open) dialog.close();
+  }, [mapOpen]);
+
   const officialSnapshot = displayedVersion?.snapshot ?? routebook?.current_version?.snapshot ?? null;
   const snapshot = preview?.preview_snapshot ?? officialSnapshot;
   const isHistorical = displayedVersion !== null;
@@ -134,6 +213,18 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
     const ids = new Set(day?.place_ids ?? []);
     return snapshot?.places.filter((place) => ids.has(place.id)) ?? [];
   }, [day, snapshot]);
+  const phase = useMemo<PlanningPhase>(() => {
+    if (error || progress?.status === "failed") return "failed";
+    if (preview) return "editing";
+    if (snapshot?.days_plan.length) return "itinerary_ready";
+    if (recommendations) return "selecting_places";
+    if (progress?.stage === "waiting_for_clarification" || progress?.status === "interrupted") return "clarifying";
+    if (busy || progress?.status === "running" || progress?.status === "queued") return "understanding";
+    return routebook?.current_version_id ? "confirming_requirements" : "understanding";
+  }, [busy, error, preview, progress, recommendations, routebook?.current_version_id, snapshot?.days_plan.length]);
+  const phaseContent = phaseCopy[phase];
+  const isActive = busy || progress?.status === "running" || progress?.status === "queued";
+  const activeQuestions = useMemo(() => clarificationQuestions(messages), [messages]);
 
   async function createTrip(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -155,27 +246,49 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
     }
   }
 
-  async function send(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!routebookId || !draft.trim()) return;
+  async function submitMessage(rawText: string) {
+    if (!routebookId || !rawText.trim() || busy) return;
+    const text = rawText.trim();
+    const optimisticId = `optimistic-${crypto.randomUUID()}`;
+    setOptimisticMessages((current) => [...current, { id: optimisticId, text, status: "sending" }]);
+    setDraft("");
     setBusy(true);
+    setError(null);
     try {
       if (officialSnapshot?.days_plan.length) {
-        const result = await routeBookApi.editDay(routebookId, activeDay, draft);
+        const result = await routeBookApi.editDay(routebookId, activeDay, text);
         if (result.proposal) setPreview(result.proposal);
       } else {
         const accepted = runId && progress?.status === "interrupted"
-          ? await routeBookApi.resume(runId, draft)
-          : await routeBookApi.sendMessage(routebookId, draft);
+          ? await routeBookApi.resume(runId, text)
+          : await routeBookApi.sendMessage(routebookId, text);
         setRunId(accepted.workflow_run_id);
       }
-      setDraft("");
       await refresh(routebookId);
+      setOptimisticMessages((current) => current.filter((message) => message.id !== optimisticId));
     } catch (reason) {
+      setOptimisticMessages((current) => current.map((message) =>
+        message.id === optimisticId ? { ...message, status: "failed" } : message,
+      ));
       setError(reason instanceof Error ? reason.message : "消息发送失败");
     } finally {
       setBusy(false);
     }
+  }
+
+  async function send(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await submitMessage(draft);
+  }
+
+  function restoreFailedMessage(message: OptimisticMessage) {
+    setDraft(message.text);
+    setOptimisticMessages((current) => current.filter((item) => item.id !== message.id));
+  }
+
+  function closeMap() {
+    setMapOpen(false);
+    window.setTimeout(() => mapTriggerRef.current?.focus(), 0);
   }
 
   async function decide(proposal: Proposal, decision: "accept" | "reject") {
@@ -278,7 +391,7 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
         <Link href="/" className="brand">ROUTEBOOK<span>/</span>AGENT</Link>
         <div className="trip-title"><strong>{routebook?.title ?? "正在载入路书"}</strong><small>{routebook?.status ?? "loading"} · 固定读取版本 {routebook?.current_version?.version_number ?? "—"}</small></div>
         <div className="header-actions">
-          <span className={`sync-state ${progress?.status ?? "idle"}`}>{progress?.message ?? "版本已同步"}</span>
+          <span className={`phase-badge phase-${phase}`}>{phaseContent.title}</span>
           {isHistorical && <button onClick={() => setDisplayedVersion(null)}>返回当前版本</button>}
           <button disabled={busy || isHistorical || !routebook?.current_version?.parent_version_id} onClick={async () => { if (routebookId) { await routeBookApi.undo(routebookId); await refresh(routebookId); } }}>撤销</button>
           <button className="finalize-button" disabled={busy || isHistorical || !routebook?.current_version_id} onClick={finalize}>生成最终页</button>
@@ -289,12 +402,25 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
       {isHistorical && <div className="history-banner"><strong>只读历史版本 v{displayedVersion.version_number}</strong><span>{displayedVersion.change_summary}</span><button onClick={() => setDisplayedVersion(null)}>返回当前版本</button></div>}
       {preview && <div className="proposal-banner"><strong>你正在查看提案预览</strong><span>正式版本仍为 v{routebook?.current_version?.version_number}</span><button onClick={() => decide(preview, "reject")}>拒绝</button><button className="primary" onClick={() => decide(preview, "accept")}>确认修改</button></div>}
 
-      <div className="three-columns">
+      <div className="workspace-columns">
         <aside className="conversation-panel" aria-label="规划对话">
           <div className="panel-heading"><p className="kicker">01 / CONVERSATION</p><h2>一起把路走顺</h2></div>
-          <div className="messages" aria-live="polite">
+          <div className="messages">
             {!messages.length && <p className="empty-copy">还没有对话记录。把你的旅行想法发给我。</p>}
             {messages.map((message) => <article key={message.id} className={`message ${message.role}`}><small>{message.role === "user" ? "你" : "路书助手"}</small><p>{messageText(message)}</p></article>)}
+            {phase === "clarifying" && activeQuestions[0]?.options?.length ? <div className="inline-quick-replies" aria-label="快捷回答">
+              {activeQuestions[0].options.map((option) => <button type="button" key={option.value} disabled={busy} onClick={() => submitMessage(option.value)}>{option.label}</button>)}
+            </div> : null}
+            {optimisticMessages.map((message) => <article key={message.id} className={`message user optimistic ${message.status}`}>
+              <small>{message.status === "sending" ? "你 · 正在发送" : "你 · 发送失败"}</small>
+              <p>{message.text}</p>
+              {message.status === "failed" && <button type="button" onClick={() => restoreFailedMessage(message)}>放回输入框</button>}
+            </article>)}
+            {isActive && <article className="assistant-activity" aria-label="路书助手正在工作">
+              <span className="activity-mark" aria-hidden="true"><i /><i /><i /></span>
+              <span><strong>{progress?.message ?? "正在接收并整理你的旅行想法"}</strong><small>完成后会自动更新右侧任务面板</small></span>
+            </article>}
+            <div ref={messagesEndRef} />
           </div>
           <form className="composer" onSubmit={send}>
             <label htmlFor="message">{officialSnapshot?.days_plan.length ? `修改第 ${activeDay} 天` : "补充需求"}</label>
@@ -303,19 +429,24 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
           </form>
         </aside>
 
-        <section className="itinerary-panel" aria-label="分日行程">
+        <section className={`itinerary-panel planning-phase-${phase}`} aria-labelledby="planning-panel-title">
+          <header className="planning-stage-header">
+            <div><p className="kicker">02 / {phaseContent.eyebrow}</p><h2 id="planning-panel-title">{phaseContent.title}</h2><p>{phaseContent.description}</p></div>
+            <span className={`stage-state ${isActive ? "active" : ""}`}><i aria-hidden="true" />{isActive ? "任务进行中" : phase === "itinerary_ready" ? "路线已就绪" : "等待你的操作"}</span>
+          </header>
           <div className="requirement-strip">
-            <span><small>目的地</small>{requirementText(snapshot, "destination")}</span>
-            <span><small>天数</small>{requirementText(snapshot, "days")} 天</span>
-            <span><small>节奏</small>{requirementText(snapshot, "intensity")}</span>
-            <span><small>主题</small>{requirementText(snapshot, "themes")}</span>
+            {[{ key: "destination", label: "目的地" }, { key: "days", label: "天数", suffix: " 天" }, { key: "intensity", label: "节奏" }, { key: "themes", label: "主题" }].map((item) => {
+              const state = requirementStatus(snapshot, item.key);
+              return <span key={item.key}><small>{item.label}<i className={`requirement-state ${state.className}`}>{state.label}</i></small>{requirementText(snapshot, item.key)}{item.suffix}</span>;
+            })}
           </div>
+          {phase === "clarifying" && activeQuestions.length > 0 && <RequirementConfirmation questions={activeQuestions} busy={busy} onAnswer={submitMessage} />}
           <div className="day-tabs" role="tablist" aria-label="选择日期">
             {(snapshot?.days_plan ?? []).map((item) => <button role="tab" aria-selected={activeDay === item.day_number} key={item.day_number} onClick={() => setActiveDay(item.day_number)}>D{item.day_number}<small>{item.date ?? "待定"}</small></button>)}
           </div>
-          <div className="day-heading"><div><p className="kicker">02 / ITINERARY</p><h2>第 {activeDay} 天</h2></div><span>{places.length} 个地点</span></div>
+          {!!snapshot?.days_plan.length && <div className="day-heading"><div><p className="kicker">DAY PLAN</p><h2>第 {activeDay} 天</h2></div><div className="day-heading-actions"><span>{places.length} 个地点</span><button ref={mapTriggerRef} disabled={!places.length} onClick={() => setMapOpen(true)} aria-haspopup="dialog">查看地图 ↗</button></div></div>}
           {day && snapshot && <DayFacts day={day} snapshot={snapshot} />}
-          {!places.length ? <div className="itinerary-empty"><i>⌁</i><h3>路线仍在展开</h3><p>确认需求后，这里会出现按天排列的地点、交通时间和天气状态。</p></div> : <ol className="stops">
+          {!places.length && !recommendations ? <PlanningEmptyState phase={phase} progress={progress} /> : places.length ? <ol className="stops">
             {places.map((place, index) => {
               const segment = snapshot?.route_segments.find((item) => item.origin_place_id === place.id);
               return <li key={place.id}>
@@ -327,7 +458,7 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
                 {segment && <p className="segment">↓ {segment.distance_meters ? `${(segment.distance_meters / 1000).toFixed(1)} km` : "距离未知"} · {segment.duration_seconds ? `${Math.round(segment.duration_seconds / 60)} 分钟` : "耗时未知"} <span className={`fact-status ${segment.status}`}>{statusCopy[segment.status]}</span></p>}
               </li>;
             })}
-          </ol>}
+          </ol> : null}
           {!snapshot?.days_plan.length && !recommendations && !isHistorical && <div className="planning-actions"><button disabled={busy || !routebook?.current_version_id} onClick={generateRecommendations}>生成地点推荐</button></div>}
           {recommendations && <section className="recommendation-list" aria-label="地点推荐候选">
             <div className="recommendation-heading"><div><p className="kicker">PLACE CANDIDATES</p><h3>先选想去的地方</h3></div><small>基于版本 {recommendations.base_version_id.slice(0, 8)}</small></div>
@@ -346,14 +477,65 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
           {!!versions.length && <details className="version-history"><summary>版本历史 · {versions.length}</summary>{versions.map((version) => <div key={version.id}><strong>v{version.version_number}</strong><span>{version.change_summary}</span><time>{new Date(version.created_at).toLocaleString("zh-CN")}</time><button disabled={version.id === routebook?.current_version_id} onClick={() => setDisplayedVersion(version)}>{version.id === routebook?.current_version_id ? "当前" : "查看"}</button></div>)}</details>}
         </section>
 
-        <section className="map-panel" aria-label="行程地图">
-          <div className="map-meta"><p className="kicker">03 / MAP</p><span>{preview ? "PROPOSED" : `VERSION ${displayedVersion?.version_number ?? routebook?.current_version?.version_number ?? "—"}`}</span></div>
-          <AmapMap places={places} selectedPlaceId={selectedPlaceId} onSelect={setSelectedPlaceId} fallback={<CoordinateMap places={places} selectedPlaceId={selectedPlaceId} onSelect={setSelectedPlaceId} />} />
-          <div className="map-legend"><span><i className="verified" />已验证</span><span><i className="unverified" />未验证</span><span><i className="stale" />已过期</span><span><i className="unavailable" />不可用</span><span><i className="conflicted" />有冲突</span><span><i className="proposed" />提案</span></div>
-        </section>
       </div>
+      <p className="workflow-announcer visually-hidden" aria-live="polite" aria-atomic="true">{progress?.message ?? phaseContent.title}</p>
+      {mapOpen && <dialog ref={mapDialogRef} className="map-dialog" aria-labelledby="map-dialog-title" onClose={() => setMapOpen(false)} onCancel={(event) => { event.preventDefault(); closeMap(); }}>
+        <div className="map-dialog-shell">
+          <header className="map-dialog-header">
+            <div><p className="kicker">03 / MAP</p><h2 id="map-dialog-title">第 {activeDay} 天路线地图</h2></div>
+            <div><span>{preview ? "提案预览" : `版本 ${displayedVersion?.version_number ?? routebook?.current_version?.version_number ?? "—"}`}</span><button type="button" onClick={closeMap} aria-label="关闭路线地图">关闭 ×</button></div>
+          </header>
+          <div className="map-panel">
+            <AmapMap places={places} selectedPlaceId={selectedPlaceId} onSelect={setSelectedPlaceId} fallback={<CoordinateMap places={places} selectedPlaceId={selectedPlaceId} onSelect={setSelectedPlaceId} />} />
+            <div className="map-legend"><span><i className="verified" />已验证</span><span><i className="unverified" />未验证</span><span><i className="stale" />已过期</span><span><i className="unavailable" />不可用</span><span><i className="conflicted" />有冲突</span><span><i className="proposed" />提案</span></div>
+          </div>
+        </div>
+      </dialog>}
     </main>
   );
+}
+
+function PlanningEmptyState({ phase, progress }: { phase: PlanningPhase; progress: ProgressEvent | null }) {
+  const content = phaseCopy[phase];
+  return <div className={`planning-empty phase-${phase}`}>
+    <div className="planning-orbit" aria-hidden="true"><span /><i /></div>
+    <p className="kicker">CURRENT TASK</p>
+    <h3>{content.title}</h3>
+    <p>{progress?.message ?? content.description}</p>
+    <ol aria-label="规划步骤">
+      <li className={phase === "understanding" ? "current" : "done"}><span>01</span>理解旅行想法</li>
+      <li className={phase === "clarifying" || phase === "confirming_requirements" ? "current" : ""}><span>02</span>确认关键需求</li>
+      <li className={phase === "selecting_places" ? "current" : ""}><span>03</span>选择推荐地点</li>
+      <li><span>04</span>生成完整路线</li>
+    </ol>
+  </div>;
+}
+
+function RequirementConfirmation({ questions, busy, onAnswer }: {
+  questions: ClarificationQuestion[];
+  busy: boolean;
+  onAnswer: (text: string) => Promise<void>;
+}) {
+  return <section className="requirement-confirmation" aria-labelledby="requirement-confirmation-title">
+    <header><p className="kicker">NEEDS YOUR INPUT</p><h3 id="requirement-confirmation-title">把关键条件确认清楚</h3><span>{questions.length} 项待确认</span></header>
+    <ol>
+      {questions.map((question, index) => <li key={question.question_id}>
+        <div className="question-index">{String(index + 1).padStart(2, "0")}</div>
+        <div className="question-body">
+          <h4>{question.prompt}</h4>
+          {question.options?.length ? <div className="choice-grid">
+            {question.options.map((option) => <button type="button" key={option.value} disabled={busy} onClick={() => onAnswer(option.value)}>
+              <strong>{option.label}</strong>{option.description && <small>{option.description}</small>}
+            </button>)}
+          </div> : question.input_type === "date" ? <div className="date-answer">
+            <label htmlFor={`answer-${question.question_id}`}>选择日期</label>
+            <input id={`answer-${question.question_id}`} type="date" disabled={busy} onChange={(event) => { if (event.target.value) onAnswer(`行程从 ${event.target.value} 开始`); }} />
+            {question.allow_skip && <button type="button" disabled={busy} onClick={() => onAnswer(question.skip_label ?? "日期暂未确定")}>{question.skip_label ?? "暂不确定"}</button>}
+          </div> : <p className="question-hint">请在左侧对话框中补充这项信息。</p>}
+        </div>
+      </li>)}
+    </ol>
+  </section>;
 }
 
 function CoordinateMap({ places, selectedPlaceId, onSelect }: { places: RouteBookSnapshot["places"]; selectedPlaceId: string | null; onSelect: (id: string) => void }) {

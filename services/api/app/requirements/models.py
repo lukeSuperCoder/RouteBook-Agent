@@ -13,8 +13,11 @@ NonEmptyText = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
 ]
 RequirementField = Literal[
+    "trip_scope",
     "origin",
     "destination",
+    "date_precision",
+    "travel_month",
     "start_date",
     "days",
     "transport_mode",
@@ -30,6 +33,7 @@ RequirementField = Literal[
     "notes",
 ]
 BlockingCode = Literal[
+    "missing_trip_scope",
     "missing_origin",
     "missing_start_date",
     "invalid_start_date",
@@ -60,11 +64,16 @@ class PatchAmbiguity(RequirementModel):
 
 
 class RequirementPatch(RequirementModel):
+    trip_scope: RequirementPatchValue[Literal["door_to_door", "destination_only"]] | None = None
     origin: RequirementPatchValue[NonEmptyText] | None = None
     destination: RequirementPatchValue[NonEmptyText] | None = None
+    date_precision: RequirementPatchValue[Literal["exact", "month_only", "flexible"]] | None = None
+    travel_month: RequirementPatchValue[int] | None = None
     start_date: RequirementPatchValue[date] | None = None
     days: RequirementPatchValue[int] | None = None
-    transport_mode: RequirementPatchValue[Literal["driving", "walking"]] | None = None
+    transport_mode: RequirementPatchValue[Literal[
+        "driving", "walking", "public_transit", "taxi", "cycling", "mixed", "system_decides"
+    ]] | None = None
     companions: RequirementPatchValue[list[NonEmptyText]] | None = None
     themes: RequirementPatchValue[list[NonEmptyText]] | None = None
     intensity: RequirementPatchValue[Literal["relaxed", "moderate", "compact"]] | None = None
@@ -102,6 +111,17 @@ class ClarificationQuestion(RequirementModel):
     issue_code: str = Field(min_length=1, max_length=64)
     fields: list[RequirementField] = Field(min_length=1, max_length=3)
     prompt: NonEmptyText
+    input_type: Literal["single_choice", "multi_choice", "date", "text"] = "text"
+    required: bool = True
+    options: list["ClarificationOption"] = Field(default_factory=list, max_length=8)
+    allow_skip: bool = False
+    skip_label: str | None = None
+
+
+class ClarificationOption(RequirementModel):
+    value: NonEmptyText
+    label: NonEmptyText
+    description: str | None = Field(default=None, max_length=200)
 
 
 class RequirementDecision(RequirementModel):

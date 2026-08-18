@@ -10,6 +10,7 @@ from .models import (
     BlockingCode,
     BlockingIssue,
     ClarificationQuestion,
+    ClarificationOption,
     RequirementConflict,
     RequirementDecision,
     RequirementField,
@@ -93,9 +94,13 @@ class RequirementService:
                 "source": incoming.source.value,
                 "confidence": incoming.confidence,
                 "confirmed": incoming.source == RequirementSource.EXPLICIT,
+                "decision_status": (
+                    "confirmed" if incoming.source == RequirementSource.EXPLICIT else "suggested"
+                ),
             }
 
         for ambiguity in patch.ambiguities:
+            data[ambiguity.field]["decision_status"] = "conflicted"
             conflicts.append(
                 RequirementConflict(
                     field=ambiguity.field,
@@ -113,7 +118,26 @@ class RequirementService:
                     "source": RequirementSource.DEFAULT.value,
                     "confidence": 1.0,
                     "confirmed": False,
+                    "decision_status": "suggested",
                 }
+
+        # Backward-compatible derivation for snapshots created before stage B.
+        if data["trip_scope"].get("source") == RequirementSource.MISSING.value and data["origin"].get("value"):
+            data["trip_scope"] = {
+                "value": "door_to_door",
+                "source": RequirementSource.INFERRED.value,
+                "confidence": 1.0,
+                "confirmed": False,
+                "decision_status": "suggested",
+            }
+        if data["date_precision"].get("source") == RequirementSource.MISSING.value and data["start_date"].get("value"):
+            data["date_precision"] = {
+                "value": "exact",
+                "source": RequirementSource.INFERRED.value,
+                "confidence": 1.0,
+                "confirmed": False,
+                "decision_status": "suggested",
+            }
 
         snapshot = RequirementSnapshot.model_validate(data)
         issues = self._blocking_issues(snapshot, conflicts)
@@ -141,13 +165,21 @@ class RequirementService:
         conflicts: list[RequirementConflict],
     ) -> list[BlockingIssue]:
         issues: list[BlockingIssue] = []
-        if not snapshot.origin.value:
-            issues.append(self._issue("missing_origin", "origin", "请确认从哪里出发。"))
-        if snapshot.start_date.value is None:
+        if snapshot.trip_scope.value not in {"door_to_door", "destination_only"}:
             issues.append(
-                self._issue("missing_start_date", "start_date", "请确认行程开始日期。")
+                self._issue(
+                    "missing_trip_scope",
+                    "trip_scope",
+                    "这次需要把出发地和往返交通也规划进去吗？",
+                )
             )
-        elif snapshot.start_date.value < self.today:
+        if snapshot.trip_scope.value == "door_to_door" and not snapshot.origin.value:
+            issues.append(self._issue("missing_origin", "origin", "请确认从哪里出发。"))
+        if snapshot.date_precision.value not in {"month_only", "flexible"} and snapshot.start_date.value is None:
+            issues.append(
+                self._issue("missing_start_date", "start_date", "请确认具体日期，或选择日期暂未确定。")
+            )
+        elif snapshot.start_date.value is not None and snapshot.start_date.value < self.today:
             issues.append(
                 self._issue("invalid_start_date", "start_date", "开始日期不能早于今天。")
             )
@@ -155,12 +187,14 @@ class RequirementService:
             issues.append(self._issue("missing_days", "days", "请确认旅行天数。"))
         elif not 1 <= snapshot.days.value <= 7:
             issues.append(self._issue("invalid_days", "days", "旅行天数必须为 1～7 天。"))
-        if snapshot.transport_mode.value not in {"driving", "walking"}:
+        if snapshot.transport_mode.value not in {
+            "driving", "walking", "public_transit", "taxi", "cycling", "mixed", "system_decides"
+        }:
             issues.append(
                 self._issue(
                     "missing_transport_mode",
                     "transport_mode",
-                    "请选择驾车或步行作为主要交通方式。",
+                    "请选择主要交通方式，也可以交给系统按路线安排。",
                 )
             )
         target_values = [
@@ -198,12 +232,46 @@ class RequirementService:
             digest = hashlib.sha256(
                 f"{issue.code}:{','.join(issue.fields)}".encode()
             ).hexdigest()[:12]
+            input_type = "text"
+            options: list[ClarificationOption] = []
+            allow_skip = False
+            skip_label = None
+            if issue.code == "missing_trip_scope":
+                input_type = "single_choice"
+                options = [
+                    ClarificationOption(
+                        value="只规划目的地内部行程，不考虑往返",
+                        label="只规划目的地内部",
+                        description="不需要填写出发城市",
+                    ),
+                    ClarificationOption(
+                        value="包含往返交通，我会补充出发地",
+                        label="包含出发地和往返",
+                        description="下一步继续确认出发城市",
+                    ),
+                ]
+            elif issue.code == "missing_start_date":
+                input_type = "date"
+                allow_skip = True
+                skip_label = "日期暂未确定"
+            elif issue.code == "missing_transport_mode":
+                input_type = "single_choice"
+                options = [
+                    ClarificationOption(value="地铁和步行为主", label="公共交通为主"),
+                    ClarificationOption(value="打车为主", label="打车为主"),
+                    ClarificationOption(value="自驾", label="自驾"),
+                    ClarificationOption(value="由你根据路线安排交通方式", label="由系统安排"),
+                ]
             questions.append(
                 ClarificationQuestion(
                     question_id=f"clarify-{digest}",
                     issue_code=issue.code,
                     fields=issue.fields,
                     prompt=issue.message,
+                    input_type=input_type,
+                    options=options,
+                    allow_skip=allow_skip,
+                    skip_label=skip_label,
                 )
             )
         return questions

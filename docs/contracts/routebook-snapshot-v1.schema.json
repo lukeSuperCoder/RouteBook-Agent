@@ -153,6 +153,9 @@
         "crowd_tolerance": {
           "$ref": "#/$defs/RequirementValue_str_"
         },
+        "date_precision": {
+          "$ref": "#/$defs/RequirementValue_str_"
+        },
         "days": {
           "$ref": "#/$defs/RequirementValue_int_"
         },
@@ -198,6 +201,12 @@
         "transport_mode": {
           "$ref": "#/$defs/RequirementValue_str_"
         },
+        "travel_month": {
+          "$ref": "#/$defs/RequirementValue_int_"
+        },
+        "trip_scope": {
+          "$ref": "#/$defs/RequirementValue_str_"
+        },
         "visited_place_ids": {
           "$ref": "#/$defs/RequirementValue_list_UUID__"
         },
@@ -233,6 +242,18 @@
           "title": "Confirmed",
           "type": "boolean"
         },
+        "decision_status": {
+          "default": "missing",
+          "enum": [
+            "missing",
+            "suggested",
+            "confirmed",
+            "skipped",
+            "conflicted"
+          ],
+          "title": "Decision Status",
+          "type": "string"
+        },
         "source": {
           "$ref": "#/$defs/RequirementSource",
           "default": "missing"
@@ -267,6 +288,18 @@
           "default": false,
           "title": "Confirmed",
           "type": "boolean"
+        },
+        "decision_status": {
+          "default": "missing",
+          "enum": [
+            "missing",
+            "suggested",
+            "confirmed",
+            "skipped",
+            "conflicted"
+          ],
+          "title": "Decision Status",
+          "type": "string"
         },
         "source": {
           "$ref": "#/$defs/RequirementSource",
@@ -304,6 +337,18 @@
           "title": "Confirmed",
           "type": "boolean"
         },
+        "decision_status": {
+          "default": "missing",
+          "enum": [
+            "missing",
+            "suggested",
+            "confirmed",
+            "skipped",
+            "conflicted"
+          ],
+          "title": "Decision Status",
+          "type": "string"
+        },
         "source": {
           "$ref": "#/$defs/RequirementSource",
           "default": "missing"
@@ -338,6 +383,18 @@
           "default": false,
           "title": "Confirmed",
           "type": "boolean"
+        },
+        "decision_status": {
+          "default": "missing",
+          "enum": [
+            "missing",
+            "suggested",
+            "confirmed",
+            "skipped",
+            "conflicted"
+          ],
+          "title": "Decision Status",
+          "type": "string"
         },
         "source": {
           "$ref": "#/$defs/RequirementSource",
@@ -378,6 +435,18 @@
           "title": "Confirmed",
           "type": "boolean"
         },
+        "decision_status": {
+          "default": "missing",
+          "enum": [
+            "missing",
+            "suggested",
+            "confirmed",
+            "skipped",
+            "conflicted"
+          ],
+          "title": "Decision Status",
+          "type": "string"
+        },
         "source": {
           "$ref": "#/$defs/RequirementSource",
           "default": "missing"
@@ -415,6 +484,18 @@
           "default": false,
           "title": "Confirmed",
           "type": "boolean"
+        },
+        "decision_status": {
+          "default": "missing",
+          "enum": [
+            "missing",
+            "suggested",
+            "confirmed",
+            "skipped",
+            "conflicted"
+          ],
+          "title": "Decision Status",
+          "type": "string"
         },
         "source": {
           "$ref": "#/$defs/RequirementSource",

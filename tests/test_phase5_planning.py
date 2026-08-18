@@ -217,6 +217,36 @@ def test_route_and_weather_failures_keep_places_and_mark_degraded() -> None:
     assert result.draft.weather[0].status == FactStatus.UNAVAILABLE
 
 
+def test_flexible_date_and_public_transit_degrade_without_crashing() -> None:
+    req = requirements(days=1, intensity="compact").model_copy(
+        update={
+            "start_date": RequirementValue(),
+            "date_precision": RequirementValue(
+                value="flexible", source=RequirementSource.EXPLICIT, confidence=1, confirmed=True
+            ),
+            "transport_mode": RequirementValue(
+                value="public_transit", source=RequirementSource.EXPLICIT, confidence=1, confirmed=True
+            ),
+        }
+    )
+    places = [
+        place("a", "A", 118.7, 32.0),
+        place("b", "B", 118.8, 32.0),
+        place("c", "C", 118.9, 32.0),
+    ]
+
+    result = service().plan(req, places)
+
+    assert result.feasible is True
+    assert result.draft is not None
+    assert result.draft.days[0].date is None
+    assert result.draft.weather == []
+    assert all(
+        segment.mode == "public_transit" and segment.status == FactStatus.UNVERIFIED
+        for segment in result.draft.days[0].segments
+    )
+
+
 def test_out_of_range_place_count_is_not_silently_planned() -> None:
     result = service().plan(
         requirements(days=1),
