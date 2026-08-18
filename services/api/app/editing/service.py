@@ -97,10 +97,17 @@ class EditingService:
         affected_place_ids = resolution.place_ids.copy()
         if intent.replacement_place:
             affected_place_ids.append(intent.replacement_place.id)
+        affected_day_segment_ids = {
+            segment_id
+            for day in snapshot.days_plan
+            if day.day_number in affected_days
+            for segment_id in day.segment_ids
+        }
         affected_segments = [
             segment.id
             for segment in snapshot.route_segments
-            if segment.origin_place_id in resolution.place_ids
+            if segment.id in affected_day_segment_ids
+            or segment.origin_place_id in resolution.place_ids
             or segment.destination_place_id in resolution.place_ids
         ]
         risks: list[RiskFlag] = []
@@ -158,8 +165,11 @@ class EditingService:
                     mode="python"
                 )
                 self._day(days, target_day)["place_ids"].append(intent.replacement_place.id)
-        elif intent.operation == "edit_day" and intent.note:
-            self._day(days, target_day)["notes"].append(intent.note)
+        elif intent.operation == "edit_day":
+            target = self._day(days, target_day)
+            target["place_ids"] = self._nearest_place_order(target["place_ids"], places)
+            target["segment_ids"] = []
+            target["weather_refs"] = []
         elif intent.operation == "change_days" and intent.target_days:
             days[:] = days[: intent.target_days]
             while len(days) < intent.target_days:
@@ -167,7 +177,7 @@ class EditingService:
                 days.append(ItineraryDaySnapshot(day_number=number).model_dump(mode="python"))
             data["requirements"]["days"]["value"] = intent.target_days
         data["places"] = list(places.values())
-        if intent.operation in {"add_place", "remove_place", "replace_place", "change_days"}:
+        if intent.operation in {"add_place", "remove_place", "replace_place", "change_days", "edit_day"}:
             affected = set(impact.affected_days)
             affected_place_ids = {
                 place_id
@@ -217,6 +227,26 @@ class EditingService:
     @staticmethod
     def _day(days: list[dict[str, Any]], number: int) -> dict[str, Any]:
         return next(item for item in days if item["day_number"] == number)
+
+    @staticmethod
+    def _nearest_place_order(place_ids: list[UUID], places: dict[UUID, dict[str, Any]]) -> list[UUID]:
+        if len(place_ids) < 3:
+            return place_ids.copy()
+        remaining = list(place_ids[1:])
+        ordered = [place_ids[0]]
+        while remaining:
+            origin = places[ordered[-1]]
+            next_id = min(
+                remaining,
+                key=lambda place_id: (
+                    (places[place_id]["longitude"] - origin["longitude"]) ** 2
+                    + (places[place_id]["latitude"] - origin["latitude"]) ** 2,
+                    str(place_id),
+                ),
+            )
+            ordered.append(next_id)
+            remaining.remove(next_id)
+        return ordered
 
     @staticmethod
     def _summary(intent: EditIntent, resolution: ReferenceResolution) -> str:

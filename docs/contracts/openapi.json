@@ -985,6 +985,17 @@
             "$ref": "#/components/schemas/RequirementSource",
             "default": "missing"
           },
+          "suggestion_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggestion Reason"
+          },
           "value": {
             "anyOf": [
               {
@@ -1030,6 +1041,17 @@
           "source": {
             "$ref": "#/components/schemas/RequirementSource",
             "default": "missing"
+          },
+          "suggestion_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggestion Reason"
           },
           "value": {
             "anyOf": [
@@ -1078,6 +1100,17 @@
             "$ref": "#/components/schemas/RequirementSource",
             "default": "missing"
           },
+          "suggestion_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggestion Reason"
+          },
           "value": {
             "anyOf": [
               {
@@ -1123,6 +1156,17 @@
           "source": {
             "$ref": "#/components/schemas/RequirementSource",
             "default": "missing"
+          },
+          "suggestion_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggestion Reason"
           },
           "value": {
             "anyOf": [
@@ -1174,6 +1218,17 @@
             "$ref": "#/components/schemas/RequirementSource",
             "default": "missing"
           },
+          "suggestion_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggestion Reason"
+          },
           "value": {
             "anyOf": [
               {
@@ -1222,6 +1277,17 @@
           "source": {
             "$ref": "#/components/schemas/RequirementSource",
             "default": "missing"
+          },
+          "suggestion_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggestion Reason"
           },
           "value": {
             "anyOf": [

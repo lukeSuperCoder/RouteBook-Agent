@@ -34,6 +34,7 @@ class RequirementValue(ApiModel, Generic[T]):
     decision_status: Literal["missing", "suggested", "confirmed", "skipped", "conflicted"] = (
         "missing"
     )
+    suggestion_reason: str | None = None
 
     @model_validator(mode="after")
     def derive_decision_status(self) -> RequirementValue[T]:

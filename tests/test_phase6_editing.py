@@ -108,7 +108,9 @@ def test_resolves_chinese_day_and_preserves_other_day_hash() -> None:
     assert plan.resolution.resolved is True
     assert plan.impact.affected_days == [2]
     assert plan.preview is not None
-    assert plan.preview.days_plan[1].notes == ["下午慢一点"]
+    assert plan.preview.days_plan[1].notes == []
+    assert plan.preview.days_plan[1].segment_ids == []
+    assert plan.preview.days_plan[1].weather_refs == []
     assert day_hash(base, base.days_plan[0]) == day_hash(
         plan.preview, plan.preview.days_plan[0]
     )
@@ -247,6 +249,39 @@ def test_recompute_queries_only_affected_day_and_preserves_other_day_hash() -> N
     )
 
 
+def test_edit_day_replans_only_target_day_routes_and_weather() -> None:
+    base = snapshot()
+    plan = EditingService().plan(
+        base,
+        EditIntent(operation="edit_day", day_reference="第一天", note="下午轻松一点"),
+    )
+    assert plan.preview is not None
+    calls: list[str] = []
+    now = datetime.now(UTC)
+
+    def route(origin: Coordinate, destination: Coordinate, mode: str) -> RouteResult:
+        calls.append(f"route:{mode}")
+        return RouteResult(
+            mode=mode,
+            origin=origin,
+            destination=destination,
+            distance_meters=2_000,
+            duration_seconds=480,
+            fetched_at=now,
+        )
+
+    def weather(location: Coordinate) -> FactCollection[DailyForecast]:
+        calls.append("weather")
+        return FactCollection(status=FactStatus.UNAVAILABLE, items=[])
+
+    recomputed = AffectedScopeRecomputer(route, weather).recompute(plan.preview, plan.impact)
+
+    assert calls == ["route:driving", "weather"]
+    assert recomputed.days_plan[0].segment_ids
+    assert recomputed.route_segments[0].distance_meters == 2_000
+    assert day_hash(base, base.days_plan[1]) == day_hash(recomputed, recomputed.days_plan[1])
+
+
 def test_editing_subgraph_returns_serializable_strict_plan() -> None:
     plan = invoke_editing_subgraph(
         snapshot(),
@@ -255,4 +290,5 @@ def test_editing_subgraph_returns_serializable_strict_plan() -> None:
 
     assert plan.resolution.resolved is True
     assert plan.preview is not None
-    assert plan.preview.days_plan[0].notes == ["早点出发"]
+    assert plan.preview.days_plan[0].notes == []
+    assert plan.preview.days_plan[0].segment_ids == []

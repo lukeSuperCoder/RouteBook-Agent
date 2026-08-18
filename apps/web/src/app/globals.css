@@ -54,6 +54,28 @@ button:disabled { cursor:not-allowed; opacity:.45; }.inline-error { margin-top:3
 .map-legend { position:absolute; z-index:4; left:20px; right:20px; bottom:18px; display:flex; flex-wrap:wrap; gap:10px; padding:9px 11px; background:rgba(250,246,237,.9); font-size:.58rem; }.map-legend span { display:flex; align-items:center; gap:4px; }.map-legend i { width:7px; height:7px; border-radius:50%; background:var(--moss); }.map-legend i.unverified { background:#9a6718; }.map-legend i.stale { background:#77518e; }.map-legend i.unavailable { background:#9b3b2d; }.map-legend i.conflicted { background:#bc3b68; }.map-legend i.proposed { background:var(--orange); }
 .map-dialog { width:min(1180px,94vw); height:min(820px,92vh); max-width:none; max-height:none; padding:0; border:1px solid rgba(250,246,237,.4); color:var(--ink); background:var(--paper); box-shadow:0 35px 100px rgba(5,16,11,.45); }.map-dialog::backdrop { background:rgba(10,22,16,.7); backdrop-filter:blur(5px); }.map-dialog-shell { height:100%; display:grid; grid-template-rows:auto 1fr; }.map-dialog-header { min-height:84px; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:16px 22px; border-bottom:1px solid var(--line); background:var(--cream); }.map-dialog-header h2 { margin:5px 0 0; font-size:1.7rem; }.map-dialog-header>div:last-child { display:flex; align-items:center; gap:16px; color:var(--muted); font-size:.68rem; }.map-dialog-header button { border:1px solid var(--line); padding:9px 12px; color:var(--ink); background:transparent; cursor:pointer; }.map-dialog .map-panel { min-height:0; }
 .visually-hidden:where(:not(:focus-within,:active)) { position:absolute!important; width:1px!important; height:1px!important; margin:-1px!important; padding:0!important; overflow:hidden!important; clip-path:inset(50%)!important; white-space:nowrap!important; border:0!important; }
+
+/* Stage D: adaptive, explainable and keyboard-friendly planning controls. */
+input { font:inherit; }
+input:focus-visible { outline:3px solid var(--orange); outline-offset:2px; }
+.itinerary-panel { container-type:inline-size; }
+.day-tabs button { min-height:48px; }
+.day-tabs button[aria-pressed="true"] { color:var(--cream); background:var(--moss); }
+.cancel-workflow { min-height:44px; padding:8px 11px; border:1px solid rgba(255,255,255,.4); color:var(--cream); background:transparent; cursor:pointer; }
+.suggestion-reason { display:block; margin-top:5px; overflow:hidden; color:var(--muted); font-size:.55rem; font-style:normal; line-height:1.35; white-space:normal; }
+.question-rationale { margin:0 0 13px; color:var(--muted); font-size:.62rem; line-height:1.5; }
+.choice-grid button.recommended { border:2px solid var(--orange); background:rgba(237,90,42,.05); }
+.choice-grid strong span { float:right; padding:2px 4px; color:var(--cream); background:var(--orange); font-size:.5rem; }
+.choice-grid .recommendation-reason { color:#8d551a; }
+.date-answer input,.date-answer button { min-height:48px; }
+.recommendation-list article:nth-of-type(n+4) { content-visibility:auto; contain-intrinsic-size:auto none auto 180px; }
+@container (max-width:560px) {
+  .choice-grid { grid-template-columns:1fr; }
+  .requirement-strip { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (pointer:coarse) {
+  .candidate-actions button,.inline-quick-replies button,.planning-actions button,.build-itinerary { min-height:48px; }
+}
 @keyframes pulse { to { opacity:.25; transform:scale(.8); } }
 @keyframes thinking { 0%,70%,100% { transform:translateY(0); opacity:.35; } 35% { transform:translateY(-4px); opacity:1; } }
 @keyframes orbit { to { rotate:360deg; } }

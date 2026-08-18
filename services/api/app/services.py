@@ -395,6 +395,7 @@ class RequirementMessageService:
         messages.add(message)
         run.status = WorkflowStatus.QUEUED.value
         run.current_stage = WorkflowStage.QUEUED.value
+        run.status_message = "已收到回答，正在继续确认需求"
         routebook = RouteBookRepository(session).get(run.routebook_id)
         if routebook is not None:
             routebook.status = RouteBookStatus.PLANNING.value
@@ -426,6 +427,34 @@ class RequirementMessageService:
             role="assistant",
             kind="requirement_clarification",
             payload_jsonb=payload,
+        )
+        messages.add(message)
+        session.flush()
+        return message
+
+    @staticmethod
+    def record_status(
+        session: Session,
+        *,
+        run_id: UUID,
+        trigger_message_id: str,
+        text: str,
+    ) -> ConversationMessageModel:
+        run = WorkflowRunRepository(session).get(run_id)
+        if run is None:
+            raise NotFoundError(details={"resource": "workflow_run"})
+        client_message_id = f"system-status-{trigger_message_id}"
+        messages = ConversationMessageRepository(session)
+        existing = messages.get_by_client_id(run.routebook_id, client_message_id)
+        if existing is not None:
+            return existing
+        message = ConversationMessageModel(
+            routebook_id=run.routebook_id,
+            workflow_run_id=run_id,
+            client_message_id=client_message_id,
+            role="assistant",
+            kind="status",
+            payload_jsonb={"text": text},
         )
         messages.add(message)
         session.flush()

@@ -71,9 +71,14 @@ class RequirementPatch(RequirementModel):
     travel_month: RequirementPatchValue[int] | None = None
     start_date: RequirementPatchValue[date] | None = None
     days: RequirementPatchValue[int] | None = None
-    transport_mode: RequirementPatchValue[Literal[
-        "driving", "walking", "public_transit", "taxi", "cycling", "mixed", "system_decides"
-    ]] | None = None
+    transport_mode: (
+        RequirementPatchValue[
+            Literal[
+                "driving", "walking", "public_transit", "taxi", "cycling", "mixed", "system_decides"
+            ]
+        ]
+        | None
+    ) = None
     companions: RequirementPatchValue[list[NonEmptyText]] | None = None
     themes: RequirementPatchValue[list[NonEmptyText]] | None = None
     intensity: RequirementPatchValue[Literal["relaxed", "moderate", "compact"]] | None = None
@@ -113,15 +118,21 @@ class ClarificationQuestion(RequirementModel):
     prompt: NonEmptyText
     input_type: Literal["single_choice", "multi_choice", "date", "text"] = "text"
     required: bool = True
-    options: list["ClarificationOption"] = Field(default_factory=list, max_length=8)
+    options: list[ClarificationOption] = Field(default_factory=list, max_length=8)
     allow_skip: bool = False
     skip_label: str | None = None
+    priority: int = Field(default=50, ge=0, le=100)
+    information_gain: float = Field(default=0.5, ge=0, le=1)
+    rationale: str | None = Field(default=None, max_length=240)
+    recommended_option_value: str | None = None
 
 
 class ClarificationOption(RequirementModel):
     value: NonEmptyText
     label: NonEmptyText
     description: str | None = Field(default=None, max_length=200)
+    recommended: bool = False
+    recommendation_reason: str | None = Field(default=None, max_length=200)
 
 
 class RequirementDecision(RequirementModel):

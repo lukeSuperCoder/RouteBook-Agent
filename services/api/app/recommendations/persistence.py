@@ -13,6 +13,8 @@ from ..schemas import (
     RecommendationObservabilityRead,
     RouteBookSnapshotV1,
 )
+from ..requirements.models import RequirementPatch
+from ..requirements.service import RequirementService
 from .models import PlaceFeedback, PlaceProposalStatus, RecommendationResult
 
 
@@ -110,7 +112,16 @@ class RecommendationPersistenceService:
         version = VersionRepository(session).get(routebook.current_version_id)
         if version is None:
             raise NotFoundError(details={"resource": "routebook_version"})
-        return version.id, RouteBookSnapshotV1.model_validate(version.snapshot_jsonb)
+        snapshot = RouteBookSnapshotV1.model_validate(version.snapshot_jsonb)
+        decision = RequirementService().apply(snapshot.requirements, RequirementPatch())
+        if not decision.ready:
+            raise WorkflowStateConflictError(
+                details={
+                    "reason": "requirements_not_confirmed",
+                    "blocking_issues": [item.code for item in decision.blocking_issues],
+                }
+            )
+        return version.id, snapshot
 
     @staticmethod
     def rejected_reasons(session: Session, routebook_id: UUID) -> list[str]:

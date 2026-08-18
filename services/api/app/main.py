@@ -34,7 +34,7 @@ from .errors import (
     WorkflowStateConflictError,
 )
 from .finalization import FinalizationService
-from .models import WorkflowRunModel, utc_now
+from .models import ConversationMessageModel, WorkflowRunModel, utc_now
 from .observability import configure_logging, request_id_context
 from .planning.graph import invoke_itinerary_planning_subgraph
 from .planning.models import PlanningPlace, PlanningResult
@@ -480,9 +480,19 @@ def create_app(
         )
         if run.latest_event_id:
             snapshot = snapshot.model_copy(update={"event_id": UUID(run.latest_event_id)})
+        resume_after = last_event_id
+        if (
+            resume_after is None
+            and run.latest_event_id
+            and run.status in {WorkflowStatus.QUEUED.value, WorkflowStatus.RUNNING.value}
+        ):
+            # A resumed requirement workflow reuses its run id and Redis stream.
+            # Skip the previous interrupted terminal event instead of replaying it
+            # and closing the new SSE connection before fresh progress arrives.
+            resume_after = run.latest_event_id
         return StreamingResponse(
             stream_progress(
-                settings.redis_url, run_id, last_event_id=last_event_id, snapshot=snapshot
+                settings.redis_url, run_id, last_event_id=resume_after, snapshot=snapshot
             ),
             media_type="text/event-stream",
             headers={
@@ -758,6 +768,7 @@ def create_app(
             "remove_place",
             "replace_place",
             "change_days",
+            "edit_day",
         }:
             recomputed = app.state.edit_recompute_runner(plan.preview, plan.impact)
             plan = plan.model_copy(update={"preview": recomputed})
@@ -770,6 +781,37 @@ def create_app(
                 plan=plan,
                 operation_id=payload.operation_id,
             )
+            messages = ConversationMessageRepository(session)
+            user_message_key = f"edit-user-{payload.operation_id}"
+            if messages.get_by_client_id(routebook_id, user_message_key) is None:
+                messages.add(
+                    ConversationMessageModel(
+                        routebook_id=routebook_id,
+                        workflow_run_id=payload.operation_id,
+                        client_message_id=user_message_key,
+                        role="user",
+                        kind="status",
+                        payload_jsonb={"text": payload.note or "提交了一项行程修改"},
+                    )
+                )
+            assistant_message_key = f"edit-assistant-{payload.operation_id}"
+            if messages.get_by_client_id(routebook_id, assistant_message_key) is None:
+                day_label = payload.day_reference or "行程"
+                reply = (
+                    f"{day_label}的修改方案已生成，请在右侧预览并确认。"
+                    if result.proposal
+                    else f"已按你的要求重新规划{day_label}，地点顺序和路线数据已同步刷新。"
+                )
+                messages.add(
+                    ConversationMessageModel(
+                        routebook_id=routebook_id,
+                        workflow_run_id=payload.operation_id,
+                        client_message_id=assistant_message_key,
+                        role="assistant",
+                        kind="status",
+                        payload_jsonb={"text": reply},
+                    )
+                )
         return EditExecutionRead(
             status="pending_confirmation" if result.proposal else "completed",
             version_id=result.version_id,

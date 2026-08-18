@@ -6,6 +6,7 @@ export interface RequirementValue<T> {
   confidence: number;
   confirmed: boolean;
   decision_status?: "missing" | "suggested" | "confirmed" | "skipped" | "conflicted";
+  suggestion_reason?: string | null;
 }
 
 export interface RouteBookSnapshot {
@@ -115,6 +116,15 @@ export interface WorkflowAccepted {
   events_url: string;
 }
 
+export interface WorkflowRun {
+  id: string;
+  status: string;
+  current_stage: string;
+  phase: string | null;
+  message: string | null;
+  latest_event_id: string | null;
+}
+
 export interface ProgressEvent {
   stage: string;
   status: string;
@@ -167,7 +177,7 @@ export const routeBookApi = {
   recommendations: (id: string) =>
     request<RecommendationBatch>(`/api/routebooks/${id}/recommendations/latest`),
   generateRecommendations: (id: string) =>
-    request<RecommendationBatch>(`/api/routebooks/${id}/recommendations`, {
+    request<WorkflowAccepted>(`/api/routebooks/${id}/recommendations`, {
       method: "POST",
       body: JSON.stringify({ limit: 8 }),
     }),
@@ -181,12 +191,13 @@ export const routeBookApi = {
     { method: "POST", body: JSON.stringify({ action, reason: reason ?? null }) },
   ),
   generateItinerary: (id: string) =>
-    request<{ feasible: boolean; version_id: string | null; conflicts: Array<Record<string, unknown>> }>(
-      `/api/routebooks/${id}/itinerary`,
-      { method: "POST" },
-    ),
+    request<WorkflowAccepted>(`/api/routebooks/${id}/itinerary`, { method: "POST" }),
+  activeWorkflows: (id: string) =>
+    request<WorkflowRun[]>(`/api/routebooks/${id}/workflow-runs/active`),
+  cancelWorkflow: (runId: string) =>
+    request<WorkflowRun>(`/api/workflow-runs/${runId}/cancel`, { method: "POST" }),
   editDay: (id: string, dayNumber: number, note: string) =>
-    request<{ status: string; version_id: string | null; proposal: Proposal | null }>(
+    request<{ status: string; version_id: string | null; proposal: Proposal | null; clarification?: string | null; candidates?: string[] }>(
       `/api/routebooks/${id}/edits`,
       {
         method: "POST",

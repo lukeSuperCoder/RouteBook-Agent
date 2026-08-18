@@ -258,6 +258,18 @@
           "$ref": "#/$defs/RequirementSource",
           "default": "missing"
         },
+        "suggestion_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Suggestion Reason"
+        },
         "value": {
           "anyOf": [
             {
@@ -304,6 +316,18 @@
         "source": {
           "$ref": "#/$defs/RequirementSource",
           "default": "missing"
+        },
+        "suggestion_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Suggestion Reason"
         },
         "value": {
           "anyOf": [
@@ -353,6 +377,18 @@
           "$ref": "#/$defs/RequirementSource",
           "default": "missing"
         },
+        "suggestion_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Suggestion Reason"
+        },
         "value": {
           "anyOf": [
             {
@@ -399,6 +435,18 @@
         "source": {
           "$ref": "#/$defs/RequirementSource",
           "default": "missing"
+        },
+        "suggestion_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Suggestion Reason"
         },
         "value": {
           "anyOf": [
@@ -451,6 +499,18 @@
           "$ref": "#/$defs/RequirementSource",
           "default": "missing"
         },
+        "suggestion_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Suggestion Reason"
+        },
         "value": {
           "anyOf": [
             {
@@ -500,6 +560,18 @@
         "source": {
           "$ref": "#/$defs/RequirementSource",
           "default": "missing"
+        },
+        "suggestion_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Suggestion Reason"
         },
         "value": {
           "anyOf": [

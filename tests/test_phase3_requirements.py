@@ -106,9 +106,7 @@ def test_explicit_correction_can_replace_confirmed_value() -> None:
             confirmed=True,
         )
     )
-    decision = RequirementService(today=TODAY).apply(
-        current, RequirementPatch(days=explicit(4))
-    )
+    decision = RequirementService(today=TODAY).apply(current, RequirementPatch(days=explicit(4)))
     assert decision.snapshot.days.value == 4
     assert decision.snapshot.days.confirmed is True
 
@@ -154,18 +152,16 @@ def test_list_patch_can_append_and_remove_without_losing_confirmed_items() -> No
 
 
 def test_clarification_is_limited_to_three_blocking_questions() -> None:
-    decision = RequirementService(today=TODAY).apply(
-        RequirementSnapshot(), RequirementPatch()
-    )
+    decision = RequirementService(today=TODAY).apply(RequirementSnapshot(), RequirementPatch())
     assert len(decision.blocking_issues) == 5
     assert len(decision.questions) == 3
     assert [question.issue_code for question in decision.questions] == [
+        "missing_target",
         "missing_trip_scope",
-        "missing_start_date",
         "missing_days",
     ]
-    assert decision.questions[0].input_type == "single_choice"
-    assert len(decision.questions[0].options) == 2
+    assert decision.questions[1].input_type == "single_choice"
+    assert len(decision.questions[1].options) == 2
 
 
 def test_destination_only_month_plan_does_not_require_origin_or_exact_date() -> None:
@@ -186,6 +182,39 @@ def test_destination_only_month_plan_does_not_require_origin_or_exact_date() -> 
     assert decision.snapshot.start_date.value is None
     assert decision.snapshot.trip_scope.decision_status == "confirmed"
     assert decision.snapshot.intensity.decision_status == "suggested"
+    assert decision.snapshot.intensity.suggestion_reason
+
+
+def test_transport_options_adapt_to_mobility_sensitive_companions() -> None:
+    decision = RequirementService(today=TODAY).apply(
+        RequirementSnapshot(),
+        RequirementPatch(
+            trip_scope=explicit("destination_only"),
+            destination=explicit("北京"),
+            date_precision=explicit("month_only"),
+            travel_month=explicit(9),
+            days=explicit(3),
+            companions=explicit(["老人", "儿童"]),
+        ),
+    )
+
+    question = next(
+        item for item in decision.questions if item.issue_code == "missing_transport_mode"
+    )
+    recommended = next(item for item in question.options if item.recommended)
+    assert question.recommended_option_value == "打车为主"
+    assert recommended.value == "打车为主"
+    assert recommended.recommendation_reason
+    assert any(item.label == "混合交通" for item in question.options)
+
+
+def test_question_order_uses_information_gain_and_is_stable() -> None:
+    decision = RequirementService(today=TODAY).apply(RequirementSnapshot(), RequirementPatch())
+
+    assert [item.priority for item in decision.questions] == sorted(
+        [item.priority for item in decision.questions], reverse=True
+    )
+    assert all(item.rationale for item in decision.questions)
 
 
 def test_flexible_date_question_can_be_skipped_explicitly() -> None:
@@ -199,7 +228,9 @@ def test_flexible_date_question_can_be_skipped_explicitly() -> None:
         ),
     )
 
-    date_question = next(item for item in decision.questions if item.issue_code == "missing_start_date")
+    date_question = next(
+        item for item in decision.questions if item.issue_code == "missing_start_date"
+    )
     assert date_question.input_type == "date"
     assert date_question.allow_skip is True
     assert date_question.skip_label == "日期暂未确定"
@@ -240,9 +271,9 @@ def test_requirement_graph_interrupts_then_resumes_from_same_thread() -> None:
 
     completed = graph.invoke(
         Command(
-            resume=ClarificationAnswer(
-                message_id="message-002", text=answer
-            ).model_dump(mode="json")
+            resume=ClarificationAnswer(message_id="message-002", text=answer).model_dump(
+                mode="json"
+            )
         ),
         config=config,
     )
@@ -279,9 +310,9 @@ def test_duplicate_resume_message_is_idempotent() -> None:
         ),
         config=config,
     )
-    payload: dict[str, Any] = ClarificationAnswer(
-        message_id="message-102", text=answer
-    ).model_dump(mode="json")
+    payload: dict[str, Any] = ClarificationAnswer(message_id="message-102", text=answer).model_dump(
+        mode="json"
+    )
     once = graph.invoke(Command(resume=payload), config=config)
     assert once["job_stage"] == "waiting_for_clarification"
     twice = graph.invoke(Command(resume=payload), config=config)

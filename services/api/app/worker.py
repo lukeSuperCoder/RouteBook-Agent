@@ -282,6 +282,12 @@ def execute_requirement_workflow(
                     change_summary="更新旅行需求",
                     source_user_message=message_text,
                 )
+                RequirementMessageService.record_status(
+                    session,
+                    run_id=run_id,
+                    trigger_message_id=client_message_id,
+                    text="需求已确认，请在右侧查看地点推荐。",
+                )
 
         if decision.ready:
             publisher.publish(
