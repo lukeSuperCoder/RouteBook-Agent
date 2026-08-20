@@ -6,5 +6,10 @@ export default async function Home({
   searchParams: Promise<{ routebook?: string }>;
 }) {
   const { routebook } = await searchParams;
-  return <RouteBookWorkspace initialRouteBookId={routebook ?? null} />;
+  return (
+    <RouteBookWorkspace
+      key={routebook ?? "new-routebook"}
+      initialRouteBookId={routebook ?? null}
+    />
+  );
 }

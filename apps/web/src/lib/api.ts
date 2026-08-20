@@ -71,6 +71,8 @@ export interface RouteBook {
   current_version_id: string | null;
   latest_final_version_id: string | null;
   current_version: RouteBookVersion | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ConversationMessage {
@@ -187,6 +189,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       response.status,
     );
   }
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -199,6 +202,8 @@ export const routeBookApi = {
       body: JSON.stringify({ title }),
     }),
   get: (id: string) => request<RouteBook>(`/api/routebooks/${id}`),
+  list: () => request<RouteBook[]>("/api/routebooks"),
+  delete: (id: string) => request<void>(`/api/routebooks/${id}`, { method: "DELETE" }),
   messages: (id: string) => request<ConversationMessage[]>(`/api/routebooks/${id}/messages`),
   proposals: (id: string) => request<Proposal[]>(`/api/routebooks/${id}/proposals`),
   versions: (id: string) => request<RouteBookVersion[]>(`/api/routebooks/${id}/versions`),

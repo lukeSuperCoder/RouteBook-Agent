@@ -394,6 +394,41 @@ def create_app(
         )
 
     @app.get(
+        "/api/routebooks",
+        response_model=list[RouteBookRead],
+        tags=["routebooks"],
+    )
+    def list_routebooks(
+        session: Session = Depends(get_session),
+        _principal: RequestPrincipal = Depends(get_request_principal),
+    ) -> list[RouteBookRead]:
+        books = RouteBookRepository(session).list_active()
+        versions = VersionRepository(session)
+        return [
+            routebook_read(
+                book,
+                versions.get(book.current_version_id) if book.current_version_id else None,
+            )
+            for book in books
+        ]
+
+    @app.delete(
+        "/api/routebooks/{routebook_id}",
+        status_code=204,
+        responses={404: {"model": ErrorResponse}},
+        tags=["routebooks"],
+    )
+    def delete_routebook(
+        routebook_id: UUID,
+        session: Session = Depends(get_session),
+        _principal: RequestPrincipal = Depends(get_request_principal),
+    ) -> Response:
+        with session.begin():
+            if not RouteBookRepository(session).soft_delete(routebook_id):
+                raise NotFoundError(details={"resource": "routebook"})
+        return Response(status_code=204)
+
+    @app.get(
         "/api/routebooks/{routebook_id}",
         response_model=RouteBookRead,
         responses={404: {"model": ErrorResponse}},

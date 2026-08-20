@@ -17,6 +17,7 @@ from .models import (
     RouteBookModel,
     RouteBookVersionModel,
     WorkflowRunModel,
+    utc_now,
 )
 
 
@@ -28,10 +29,29 @@ class RouteBookRepository:
         self.session.add(routebook)
 
     def get(self, routebook_id: UUID, *, for_update: bool = False) -> RouteBookModel | None:
-        statement = select(RouteBookModel).where(RouteBookModel.id == routebook_id)
+        statement = select(RouteBookModel).where(
+            RouteBookModel.id == routebook_id,
+            RouteBookModel.deleted_at.is_(None),
+        )
         if for_update:
             statement = statement.with_for_update()
         return self.session.scalar(statement)
+
+    def list_active(self) -> list[RouteBookModel]:
+        return list(
+            self.session.scalars(
+                select(RouteBookModel)
+                .where(RouteBookModel.deleted_at.is_(None))
+                .order_by(RouteBookModel.updated_at.desc(), RouteBookModel.created_at.desc())
+            )
+        )
+
+    def soft_delete(self, routebook_id: UUID) -> bool:
+        routebook = self.get(routebook_id, for_update=True)
+        if routebook is None:
+            return False
+        routebook.deleted_at = utc_now()
+        return True
 
 
 class WorkflowRunRepository:

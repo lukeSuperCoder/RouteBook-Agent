@@ -165,6 +165,7 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
   const [error, setError] = useState<string | null>(null);
   const [placeConfirmation, setPlaceConfirmation] = useState<PlaceConfirmation | null>(null);
   const [optimisticMessages, setOptimisticMessages] = useState<OptimisticMessage[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const autoRecommendationVersionRef = useRef<string | null>(null);
 
@@ -510,7 +511,7 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
   if (!routebookId) {
     return (
       <main className="welcome-shell">
-        <header className="topbar"><b>ROUTEBOOK<span>/</span>AGENT</b><small>路线不是清单，是一天的呼吸。</small></header>
+        <header className="topbar"><b>ROUTEBOOK<span>/</span>AGENT</b><div><button className="history-trigger" type="button" onClick={() => setHistoryOpen(true)}><span className="history-trigger-icon" aria-hidden="true">≡</span><span>历史任务</span><i>查看</i></button><small>路线不是清单，是一天的呼吸。</small></div></header>
         <section className="welcome-card">
           <p className="kicker">从一句话开始 · PHASE 07</p>
           <h1>输入旅行需求，<em>生成可执行的行程路书。</em></h1>
@@ -522,6 +523,7 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
           </form>
           {error && <p className="inline-error" role="alert">{error}</p>}
         </section>
+        <TaskHistoryDrawer open={historyOpen} currentId={null} onClose={() => setHistoryOpen(false)} />
       </main>
     );
   }
@@ -532,6 +534,7 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
         <Link href="/" className="brand">ROUTEBOOK<span>/</span>AGENT</Link>
         <div className="trip-title"><strong>{routebook?.title ?? "正在载入路书"}</strong><small>{routebook?.status ?? "loading"} · 固定读取版本 {routebook?.current_version?.version_number ?? "—"}</small></div>
         <div className="header-actions">
+          <button className="history-trigger workspace-history-trigger" type="button" onClick={() => setHistoryOpen(true)}><span className="history-trigger-icon" aria-hidden="true">≡</span><span>历史任务</span></button>
           <span className={`phase-badge phase-${phase}`}>{phaseContent.title}</span>
           {isHistorical && <button onClick={() => setDisplayedVersion(null)}>返回当前版本</button>}
           <button disabled={busy || isHistorical || !routebook?.current_version?.parent_version_id} onClick={async () => { if (routebookId) { await routeBookApi.undo(routebookId); await refresh(routebookId); } }}>撤销</button>
@@ -652,9 +655,112 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
         </section>
 
       </div>
+      <TaskHistoryDrawer open={historyOpen} currentId={routebookId} onClose={() => setHistoryOpen(false)} onCurrentDeleted={() => {
+        history.replaceState(null, "", "/");
+        setRoutebookId(null);
+        setRoutebook(null);
+        setHistoryOpen(false);
+      }} />
       <p className="workflow-announcer visually-hidden" aria-live="polite" aria-atomic="true">{progress?.message ?? phaseContent.title}</p>
     </main>
   );
+}
+
+const taskStatusCopy: Record<string, string> = {
+  draft: "需求整理中",
+  planning: "规划中",
+  pending_confirmation: "待确认",
+  editable: "可继续编辑",
+  blocked: "需要处理",
+  final: "已完成",
+};
+
+function TaskHistoryDrawer({ open, currentId, onClose, onCurrentDeleted }: {
+  open: boolean;
+  currentId: string | null;
+  onClose: () => void;
+  onCurrentDeleted?: () => void;
+}) {
+  const [tasks, setTasks] = useState<RouteBook[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  const loadTasks = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      setTasks(await routeBookApi.list());
+    } catch (reason) {
+      setLoadError(reason instanceof Error ? reason.message : "无法载入历史任务");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const loadTimer = window.setTimeout(loadTasks, 0);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.setTimeout(() => closeRef.current?.focus(), 0);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.clearTimeout(loadTimer);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [loadTasks, onClose, open]);
+
+  async function deleteTask(id: string) {
+    setDeletingId(id);
+    setLoadError(null);
+    try {
+      await routeBookApi.delete(id);
+      setTasks((items) => items.filter((item) => item.id !== id));
+      setConfirmingId(null);
+      if (id === currentId) onCurrentDeleted?.();
+    } catch (reason) {
+      setLoadError(reason instanceof Error ? reason.message : "删除任务失败");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  if (!open) return null;
+  return <div className="history-layer" role="presentation">
+    <button className="history-scrim" type="button" aria-label="关闭历史任务" onClick={onClose} />
+    <aside className="history-drawer" role="dialog" aria-modal="true" aria-labelledby="history-title">
+      <header>
+        <div><p className="kicker">YOUR ROUTES</p><h2 id="history-title">历史任务</h2></div>
+        <button ref={closeRef} className="drawer-close" type="button" onClick={onClose} aria-label="关闭历史任务">×</button>
+      </header>
+      <div className="history-summary"><span>{tasks.length}</span><p>条旅行路线<br /><small>按最近更新排序</small></p></div>
+      <div className="task-list" aria-busy={loading}>
+        {loading && !tasks.length && <p className="drawer-state">正在整理你的路线档案…</p>}
+        {loadError && <p className="drawer-error" role="alert">{loadError} <button type="button" onClick={loadTasks}>重试</button></p>}
+        {!loading && !loadError && !tasks.length && <div className="drawer-empty"><strong>还没有历史任务</strong><p>完成第一次旅行规划后，它会出现在这里。</p></div>}
+        {tasks.map((task, index) => <article className={task.id === currentId ? "current" : ""} key={task.id}>
+          <Link href={`/?routebook=${task.id}`} aria-label={`查看任务：${task.title}`} onClick={onClose}>
+            <span className="task-number">{String(index + 1).padStart(2, "0")}</span>
+            <span className="task-copy"><strong>{task.title}</strong><small>{new Date(task.updated_at).toLocaleDateString("zh-CN", { year: "numeric", month: "short", day: "numeric" })} · {taskStatusCopy[task.status] ?? task.status}</small></span>
+            <span className="task-arrow" aria-hidden="true">↗</span>
+          </Link>
+          {confirmingId === task.id ? <div className="delete-confirm" role="alert">
+            <span>确认删除？</span>
+            <button type="button" onClick={() => setConfirmingId(null)}>取消</button>
+            <button className="danger" type="button" disabled={deletingId === task.id} onClick={() => deleteTask(task.id)}>{deletingId === task.id ? "删除中…" : "确认"}</button>
+          </div> : <button className="task-delete" type="button" onClick={() => setConfirmingId(task.id)} aria-label={`删除任务：${task.title}`}>删除</button>}
+        </article>)}
+      </div>
+      <footer><span>ROUTEBOOK ARCHIVE</span><Link href="/" onClick={onClose}>＋ 新建路线</Link></footer>
+    </aside>
+  </div>;
 }
 
 function PlanningEmptyState({ phase, progress }: { phase: PlanningPhase; progress: ProgressEvent | null }) {
