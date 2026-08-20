@@ -72,14 +72,16 @@ class RecommendationService:
         category_counts: defaultdict[str, int] = defaultdict(int)
         district_counts: defaultdict[str, int] = defaultdict(int)
         proposals: list[PlaceProposal] = []
-        for base_score, candidate, queries, preference, signals in ranked:
+
+        def append_proposal(
+            item: tuple[float, PlaceCandidate, list[str], float, list[str]],
+            *,
+            relaxed: bool,
+        ) -> None:
+            base_score, candidate, queries, preference, signals = item
             category = candidate.category_normalized.value
             district = candidate.district or "unknown"
-            if category_counts[category] >= strategy.diversity.maximum_per_category:
-                continue
-            if district_counts[district] >= strategy.diversity.maximum_per_district:
-                continue
-            diversity = 1.0 if category_counts[category] == 0 else 0.6
+            diversity = 0.3 if relaxed else (1.0 if category_counts[category] == 0 else 0.6)
             final_score = min(1.0, base_score * 0.9 + diversity * 0.1)
             proposals.append(
                 PlaceProposal(
@@ -98,8 +100,34 @@ class RecommendationService:
             )
             category_counts[category] += 1
             district_counts[district] += 1
+
+        selected_ids: set[tuple[str, str]] = set()
+        for item in ranked:
+            _, candidate, _, _, _ = item
+            category = candidate.category_normalized.value
+            district = candidate.district or "unknown"
+            if category_counts[category] >= strategy.diversity.maximum_per_category:
+                continue
+            if district_counts[district] >= strategy.diversity.maximum_per_district:
+                continue
+            append_proposal(item, relaxed=False)
+            selected_ids.add((candidate.provider, candidate.provider_place_id))
             if len(proposals) == limit:
                 break
+
+
+        # Diversity is a ranking preference, not a reason to dead-end planning.
+        # Compact destinations often return many valid POIs in the same district.
+        if len(proposals) < limit:
+            for item in ranked:
+                _, candidate, _, _, _ = item
+                key = (candidate.provider, candidate.provider_place_id)
+                if key in selected_ids:
+                    continue
+                append_proposal(item, relaxed=True)
+                selected_ids.add(key)
+                if len(proposals) == limit:
+                    break
         return RecommendationResult(
             strategy=strategy,
             proposals=proposals,

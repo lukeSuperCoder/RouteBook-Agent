@@ -56,6 +56,7 @@ export interface RouteBookVersion {
 
 export interface SharedRouteBook {
   title: string;
+  routebook_id: string;
   routebook_version_id: string;
   version_number: number;
   snapshot: RouteBookSnapshot;

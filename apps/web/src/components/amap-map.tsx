@@ -4,12 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import type { RouteBookSnapshot } from "@/lib/api";
 
 type Place = RouteBookSnapshot["places"][number];
-type MapInstance = { destroy(): void; setFitView(): void };
+type MapInstance = { destroy(): void; setFitView(overlays?: unknown[], immediately?: boolean, avoid?: number[]): void; setMapStyle(style: string): void };
 type MarkerInstance = { on(event: "click", listener: () => void): void; setMap(map: null): void };
+type DrivingInstance = { search(origin: [number, number], destination: [number, number], callback: (status: string) => void): void };
 type AMapGlobal = {
   Map: new (container: HTMLDivElement, options: Record<string, unknown>) => MapInstance;
   Marker: new (options: Record<string, unknown>) => MarkerInstance;
   Polyline: new (options: Record<string, unknown>) => unknown;
+  Driving?: new (options: Record<string, unknown>) => DrivingInstance;
 };
 
 declare global {
@@ -39,7 +41,7 @@ function loadAmap(key: string, securityCode?: string): Promise<AMapGlobal> {
       else reject(new Error("AMap SDK unavailable"));
     };
     const script = document.createElement("script");
-    script.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(key)}&callback=${callback}`;
+    script.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(key)}&plugin=AMap.Driving&callback=${callback}`;
     script.async = true;
     script.dataset.routebookAmap = "true";
     script.setAttribute("fetchpriority", "low");
@@ -78,29 +80,49 @@ export function AmapMap({ places, selectedPlaceId, onSelect, fallback }: {
       map = new AMap.Map(container, {
         zoom: 12,
         center: [places[0].longitude, places[0].latitude],
-        mapStyle: "amap://styles/whitesmoke",
+        mapStyle: "amap://styles/normal",
         viewMode: "2D",
+        showLabel: true,
       });
       places.forEach((place, index) => {
+        const markerContent = document.createElement("button");
+        markerContent.type = "button";
+        markerContent.className = `amap-route-marker${selectedPlaceId === place.id ? " selected" : ""}`;
+        markerContent.setAttribute("aria-label", `第 ${index + 1} 站 ${place.name}`);
+        markerContent.innerHTML = `<span>${index + 1}</span>`;
         const marker = new AMap.Marker({
           map,
           position: [place.longitude, place.latitude],
           title: place.name,
-          label: { content: `${index + 1} · ${place.name}`, direction: "right" },
+          content: markerContent,
+          anchor: "bottom-center",
           zIndex: selectedPlaceId === place.id ? 130 : 100,
         });
         marker.on("click", () => onSelect(place.id));
         markers.push(marker);
       });
       if (places.length > 1) {
-        new AMap.Polyline({
-          map,
-          path: places.map((place) => [place.longitude, place.latitude]),
-          strokeColor: "#ed5a2a",
-          strokeWeight: 5,
-          strokeOpacity: 0.8,
-        });
-        map.setFitView();
+        const drawFallback = (origin: Place, destination: Place) => {
+          const path = [[origin.longitude, origin.latitude], [destination.longitude, destination.latitude]];
+          new AMap.Polyline({ map, path, strokeColor: "#ffffff", strokeWeight: 10, strokeOpacity: 0.92, lineJoin: "round", lineCap: "round", zIndex: 48 });
+          new AMap.Polyline({ map, path, strokeColor: "#1688dc", strokeWeight: 6, strokeOpacity: 0.9, lineJoin: "round", lineCap: "round", zIndex: 50 });
+        };
+        const Driving = AMap.Driving;
+        if (Driving) {
+          let completed = 0;
+          places.slice(0, -1).forEach((origin, index) => {
+            const destination = places[index + 1];
+            const driving = new Driving({ map, hideMarkers: true, showTraffic: false, autoFitView: false, outlineColor: "#ffffff" });
+            driving.search([origin.longitude, origin.latitude], [destination.longitude, destination.latitude], (status) => {
+              if (status !== "complete") drawFallback(origin, destination);
+              completed += 1;
+              if (completed === places.length - 1) map?.setFitView(undefined, false, [88, 64, 88, 64]);
+            });
+          });
+        } else {
+          places.slice(0, -1).forEach((origin, index) => drawFallback(origin, places[index + 1]));
+          map.setFitView(undefined, false, [88, 64, 88, 64]);
+        }
       }
       setState("ready");
     }).catch(() => {

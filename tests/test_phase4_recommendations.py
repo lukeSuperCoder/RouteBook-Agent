@@ -142,6 +142,20 @@ def test_rejection_removes_candidate_from_current_routebook_rerank() -> None:
     assert [item.candidate.provider_place_id for item in result.proposals] == ["near"]
 
 
+def test_diversity_limits_relax_when_they_would_starve_planning() -> None:
+    candidates = [
+        candidate(str(index), f"北戴河景点{index}", district="北戴河区")
+        for index in range(1, 6)
+    ]
+    service = RecommendationService(lambda _query, _region: candidates)
+
+    result = service.recommend(build_recommendation_strategy(requirements()), limit=5)
+
+    assert len(result.proposals) == 5
+    assert result.metrics.selected_count == 5
+    assert [item.evidence.diversity_score for item in result.proposals].count(0.3) == 3
+
+
 def test_generic_place_never_silently_resolves_to_specific_candidate() -> None:
     wall = candidate("wall", "八达岭长城", district="延庆区")
     decision = AdoptionDecision(

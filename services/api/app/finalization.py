@@ -170,6 +170,7 @@ class FinalizationService:
             )
         return SharedRouteBookRead(
             title=routebook.title,
+            routebook_id=routebook.id,
             routebook_version_id=version.id,
             version_number=version.version_number,
             snapshot=snapshot,

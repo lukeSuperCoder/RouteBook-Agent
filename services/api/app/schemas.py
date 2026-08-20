@@ -376,6 +376,7 @@ class RevokeFinalPageRead(ApiModel):
 
 class SharedRouteBookRead(ApiModel):
     title: str
+    routebook_id: UUID
     routebook_version_id: UUID
     version_number: int
     snapshot: RouteBookSnapshotV1

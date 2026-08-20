@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   ApiError,
@@ -16,11 +15,6 @@ import {
   type RouteBookSnapshot,
   routeBookApi,
 } from "@/lib/api";
-
-const AmapMap = dynamic(
-  () => import("@/components/amap-map").then((module) => module.AmapMap),
-  { ssr: false, loading: () => <p className="map-loading" role="status">正在准备地图…</p> },
-);
 
 type PlanningPhase =
   | "understanding"
@@ -85,7 +79,7 @@ const phaseCopy: Record<PlanningPhase, { eyebrow: string; title: string; descrip
   confirming_requirements: { eyebrow: "REQUIREMENTS", title: "核对旅行需求", description: "当前条件已经足够开始推荐，你仍可以继续补充偏好。" },
   selecting_places: { eyebrow: "PLACE SELECTION", title: "选择想去的地方", description: "接受、排除或替换候选，系统会根据你的反馈继续收敛。" },
   building_itinerary: { eyebrow: "ROUTE BUILDING", title: "正在编排行程", description: "系统正在组合日期、地点和交通约束，并检查路线是否走得通。" },
-  itinerary_ready: { eyebrow: "ITINERARY READY", title: "完整路线已生成", description: "按天查看路线，也可以打开地图检查空间关系。" },
+  itinerary_ready: { eyebrow: "ITINERARY READY", title: "完整路线已生成", description: "逐日确认安排；准备好后进入完整版路书查看全程地图与汇总路线。" },
   editing: { eyebrow: "PROPOSAL", title: "检查本次调整", description: "当前展示的是修改预览，确认后才会写入正式版本。" },
   failed: { eyebrow: "NEEDS ATTENTION", title: "这一步没有完成", description: "保留现有内容，你可以重试或换一种说法继续。" },
 };
@@ -162,7 +156,6 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
   const [recommendations, setRecommendations] = useState<RecommendationBatch | null>(null);
   const [preview, setPreview] = useState<Proposal | null>(null);
   const [displayedVersion, setDisplayedVersion] = useState<RouteBookVersion | null>(null);
-  const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [activeDay, setActiveDay] = useState(1);
   const [draft, setDraft] = useState("");
   const [runId, setRunId] = useState<string | null>(null);
@@ -172,10 +165,7 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
   const [error, setError] = useState<string | null>(null);
   const [placeConfirmation, setPlaceConfirmation] = useState<PlaceConfirmation | null>(null);
   const [optimisticMessages, setOptimisticMessages] = useState<OptimisticMessage[]>([]);
-  const [mapOpen, setMapOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const mapDialogRef = useRef<HTMLDialogElement>(null);
-  const mapTriggerRef = useRef<HTMLButtonElement>(null);
   const autoRecommendationVersionRef = useRef<string | null>(null);
 
   const refresh = useCallback(async (id: string) => {
@@ -266,13 +256,6 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView?.({ block: "end", behavior: "smooth" });
   }, [messages, optimisticMessages, progress?.message]);
-
-  useEffect(() => {
-    const dialog = mapDialogRef.current;
-    if (!dialog) return;
-    if (mapOpen && !dialog.open) dialog.showModal();
-    if (!mapOpen && dialog.open) dialog.close();
-  }, [mapOpen]);
 
   const officialSnapshot = displayedVersion?.snapshot ?? routebook?.current_version?.snapshot ?? null;
   const snapshot = preview?.preview_snapshot ?? officialSnapshot;
@@ -443,11 +426,6 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
     setOptimisticMessages((current) => current.filter((item) => item.id !== message.id));
   }
 
-  function closeMap() {
-    setMapOpen(false);
-    window.setTimeout(() => mapTriggerRef.current?.focus(), 0);
-  }
-
   async function decide(proposal: Proposal, decision: "accept" | "reject") {
     if (!routebookId) return;
     setBusy(true);
@@ -464,9 +442,16 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
 
   async function finalize() {
     if (!routebookId || !routebook?.current_version_id) return;
+    const storageKey = `routebook-final:${routebookId}:${routebook.current_version_id}`;
+    const cachedUrl = window.sessionStorage.getItem(storageKey);
+    if (cachedUrl) {
+      window.location.assign(cachedUrl);
+      return;
+    }
     setBusy(true);
     try {
       const result = await routeBookApi.finalize(routebookId, routebook.current_version_id);
+      window.sessionStorage.setItem(storageKey, result.share_url);
       window.location.assign(result.share_url);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "最终页面生成失败");
@@ -532,8 +517,8 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
           <p>告诉我从哪里出发、去哪里、玩几天，以及你绝不能错过的地方。</p>
           <form className="starter" onSubmit={createTrip}>
             <label htmlFor="trip-brief">描述你的旅行</label>
-            <textarea id="trip-brief" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="例如：9 月从上海自驾去南京三天，想看建筑和梧桐，必去中山陵，不想赶早。" />
-            <button disabled={busy || !draft.trim()}>{busy ? "正在建立坐标…" : "开始规划 →"}</button>
+            <textarea id="trip-brief" name="tripBrief" rows={3} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="例如：9 月从上海自驾去南京三天，想看建筑和梧桐，必去中山陵，不想赶早。" />
+            <button type="submit" disabled={busy || !draft.trim()}>{busy ? "正在建立坐标…" : "开始规划 →"}</button>
           </form>
           {error && <p className="inline-error" role="alert">{error}</p>}
         </section>
@@ -550,7 +535,6 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
           <span className={`phase-badge phase-${phase}`}>{phaseContent.title}</span>
           {isHistorical && <button onClick={() => setDisplayedVersion(null)}>返回当前版本</button>}
           <button disabled={busy || isHistorical || !routebook?.current_version?.parent_version_id} onClick={async () => { if (routebookId) { await routeBookApi.undo(routebookId); await refresh(routebookId); } }}>撤销</button>
-          <button className="finalize-button" disabled={busy || isHistorical || !routebook?.current_version_id} onClick={finalize}>生成最终页</button>
         </div>
       </header>
 
@@ -607,8 +591,11 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
         <section className={`itinerary-panel planning-phase-${phase}`} aria-labelledby="planning-panel-title">
           <header className="planning-stage-header">
             <div><p className="kicker">02 / {phaseContent.eyebrow}</p><h2 id="planning-panel-title">{phaseContent.title}</h2><p>{phaseContent.description}</p></div>
-            <span className={`stage-state ${isActive ? "active" : ""}`}><i aria-hidden="true" />{isActive ? "任务进行中" : phase === "itinerary_ready" ? "路线已就绪" : "等待你的操作"}</span>
-            {isActive && runId && <button type="button" className="cancel-workflow" onClick={cancelActiveRun}>取消当前任务</button>}
+            <div className="stage-actions">
+              <span className={`stage-state ${isActive ? "active" : ""}`}><i aria-hidden="true" />{isActive ? "任务进行中" : phase === "itinerary_ready" ? "路线已就绪" : "等待你的操作"}</span>
+              {phase === "itinerary_ready" && !isHistorical && <button type="button" className="view-full-route" disabled={busy} onClick={finalize}>{busy ? "正在生成完整版…" : routebook?.latest_final_version_id === routebook?.current_version_id ? "返回完整版路书 →" : "查看完整版路书 →"}</button>}
+              {isActive && runId && <button type="button" className="cancel-workflow" onClick={cancelActiveRun}>取消当前任务</button>}
+            </div>
           </header>
           <div className="requirement-strip">
             {[{ key: "destination", label: "目的地" }, { key: "days", label: "天数", suffix: " 天" }, { key: "intensity", label: "节奏" }, { key: "themes", label: "主题" }].map((item) => {
@@ -621,17 +608,17 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
           <nav className="day-tabs" aria-label="选择日期">
             {(snapshot?.days_plan ?? []).map((item) => <button aria-pressed={activeDay === item.day_number} key={item.day_number} onClick={() => setActiveDay(item.day_number)}>D{item.day_number}<small>{item.date ?? "待定"}</small></button>)}
           </nav>
-          {!!snapshot?.days_plan.length && <div className="day-heading"><div><p className="kicker">DAY PLAN</p><h2>第 {activeDay} 天</h2></div><div className="day-heading-actions"><span>{places.length} 个地点</span><button ref={mapTriggerRef} disabled={!places.length} onClick={() => setMapOpen(true)} aria-haspopup="dialog">查看地图 ↗</button></div></div>}
+          {!!snapshot?.days_plan.length && <div className="day-heading"><div><p className="kicker">DAY PLAN</p><h2>第 {activeDay} 天</h2></div><div className="day-heading-actions"><span>{places.length} 个地点</span></div></div>}
           {day && snapshot && <DayFacts day={day} snapshot={snapshot} />}
           {!places.length && !recommendations ? <PlanningEmptyState phase={phase} progress={progress} /> : places.length ? <ol className="stops">
             {places.map((place, index) => {
               const segment = snapshot?.route_segments.find((item) => item.origin_place_id === place.id);
               return <li key={place.id}>
-                <button className={selectedPlaceId === place.id ? "selected" : ""} onClick={() => setSelectedPlaceId(place.id)}>
+                <div className="stop-row">
                   <span className="stop-index">{String(index + 1).padStart(2, "0")}</span>
                   <span><strong>{place.name}</strong><small>{place.district} · {place.semantic_type}</small></span>
                   <span className={`fact-status ${place.status}`}>{statusCopy[place.status]}</span>
-                </button>
+                </div>
                 {segment && <p className="segment">↓ {segment.distance_meters ? `${(segment.distance_meters / 1000).toFixed(1)} km` : "距离未知"} · {segment.duration_seconds ? `${Math.round(segment.duration_seconds / 60)} 分钟` : "耗时未知"} <span className={`fact-status ${segment.status}`}>{statusCopy[segment.status]}</span></p>}
               </li>;
             })}
@@ -647,7 +634,14 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
                 {candidate.status === "proposed" && <><button disabled={busy} onClick={() => feedback(candidate.id, "reject", "not_interested")}>不感兴趣</button><button disabled={busy} onClick={() => feedback(candidate.id, "reject", "too_far")}>太远</button><button className="primary" disabled={busy} onClick={() => feedback(candidate.id, "accept")}>加入行程</button></>}
               </div>
             </article>)}
-            <button className="build-itinerary" disabled={busy || recommendations.candidates.filter((item) => item.status === "accepted").length < 3} onClick={generateItinerary}>生成分日行程 →</button>
+            {(() => {
+              const acceptedCount = recommendations.candidates.filter((item) => item.status === "accepted").length;
+              const missingCount = Math.max(0, 3 - acceptedCount);
+              return <div className="build-itinerary-bar">
+                <span aria-live="polite">已选 {acceptedCount} 个{missingCount ? ` · 再选 ${missingCount} 个即可生成` : " · 可以开始编排行程"}</span>
+                <button className="build-itinerary" disabled={busy || missingCount > 0} onClick={generateItinerary}>{missingCount ? `还需选择 ${missingCount} 个地点` : "生成分日行程 →"}</button>
+              </div>;
+            })()}
           </section>}
           {!!proposals.filter((item) => item.status === "pending").length && <section className="proposal-list"><h3>待确认修改</h3>{proposals.filter((item) => item.status === "pending").map((item) => <button key={item.id} onClick={() => setPreview(item)}>查看提案 · {item.risk_flags.length} 项风险</button>)}</section>}
           {!!versions.length && <details className="version-history"><summary>版本历史 · {versions.length}</summary>{versions.map((version) => <div key={version.id}><strong>v{version.version_number}</strong><span>{version.change_summary}</span><time>{new Date(version.created_at).toLocaleString("zh-CN")}</time><button disabled={version.id === routebook?.current_version_id} onClick={() => setDisplayedVersion(version)}>{version.id === routebook?.current_version_id ? "当前" : "查看"}</button></div>)}</details>}
@@ -655,18 +649,6 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
 
       </div>
       <p className="workflow-announcer visually-hidden" aria-live="polite" aria-atomic="true">{progress?.message ?? phaseContent.title}</p>
-      {mapOpen && <dialog ref={mapDialogRef} className="map-dialog" aria-labelledby="map-dialog-title" onClose={() => setMapOpen(false)} onCancel={(event) => { event.preventDefault(); closeMap(); }}>
-        <div className="map-dialog-shell">
-          <header className="map-dialog-header">
-            <div><p className="kicker">03 / MAP</p><h2 id="map-dialog-title">第 {activeDay} 天路线地图</h2></div>
-            <div><span>{preview ? "提案预览" : `版本 ${displayedVersion?.version_number ?? routebook?.current_version?.version_number ?? "—"}`}</span><button type="button" onClick={closeMap} aria-label="关闭路线地图">关闭 ×</button></div>
-          </header>
-          <div className="map-panel">
-            <AmapMap places={places} selectedPlaceId={selectedPlaceId} onSelect={setSelectedPlaceId} fallback={<CoordinateMap places={places} selectedPlaceId={selectedPlaceId} onSelect={setSelectedPlaceId} />} />
-            <div className="map-legend"><span><i className="verified" />已验证</span><span><i className="unverified" />未验证</span><span><i className="stale" />已过期</span><span><i className="unavailable" />不可用</span><span><i className="conflicted" />有冲突</span><span><i className="proposed" />提案</span></div>
-          </div>
-        </div>
-      </dialog>}
     </main>
   );
 }
@@ -713,20 +695,6 @@ function RequirementConfirmation({ questions, busy, onAnswer }: {
       </li>)}
     </ol>
   </section>;
-}
-
-function CoordinateMap({ places, selectedPlaceId, onSelect }: { places: RouteBookSnapshot["places"]; selectedPlaceId: string | null; onSelect: (id: string) => void }) {
-  if (!places.length) return <div className="map-empty"><span>31°N</span><strong>等待路线坐标</strong><small>地图与行程将绑定同一版本出现</small><span>118°E</span></div>;
-  const lng = places.map((item) => item.longitude);
-  const lat = places.map((item) => item.latitude);
-  const minLng = Math.min(...lng), maxLng = Math.max(...lng), minLat = Math.min(...lat), maxLat = Math.max(...lat);
-  const point = (value: number, min: number, max: number) => max === min ? 50 : 12 + ((value - min) / (max - min)) * 76;
-  return <div className="coordinate-map">
-    <svg viewBox="0 0 100 100" role="img" aria-label="当天地点坐标示意图">
-      <polyline points={places.map((place) => `${point(place.longitude, minLng, maxLng)},${100 - point(place.latitude, minLat, maxLat)}`).join(" ")} />
-    </svg>
-    {places.map((place, index) => <button key={place.id} className={`map-marker ${place.status} ${selectedPlaceId === place.id ? "selected" : ""}`} style={{ left: `${point(place.longitude, minLng, maxLng)}%`, top: `${100 - point(place.latitude, minLat, maxLat)}%` }} onClick={() => onSelect(place.id)} aria-label={`定位到 ${place.name}`}>{index + 1}<span>{place.name}</span></button>)}
-  </div>;
 }
 
 function DayFacts({ day, snapshot }: {
