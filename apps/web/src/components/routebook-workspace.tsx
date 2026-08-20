@@ -508,6 +508,16 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
     }
   }
 
+  async function retryRefresh() {
+    if (!routebookId) return;
+    setError(null);
+    try {
+      await refresh(routebookId);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "刷新任务失败");
+    }
+  }
+
   if (!routebookId) {
     return (
       <main className="welcome-shell">
@@ -541,7 +551,7 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
         </div>
       </header>
 
-      {error && <div className="error-banner" role="alert">{error}<button onClick={() => refresh(routebookId)}>重试</button></div>}
+      {error && <div className="error-banner" role="alert">{error}<button onClick={retryRefresh}>重试</button></div>}
       {isHistorical && <div className="history-banner"><strong>只读历史版本 v{displayedVersion.version_number}</strong><span>{displayedVersion.change_summary}</span><button onClick={() => setDisplayedVersion(null)}>返回当前版本</button></div>}
       {preview && <div className="proposal-banner"><strong>你正在查看提案预览</strong><span>正式版本仍为 v{routebook?.current_version?.version_number}</span><button onClick={() => decide(preview, "reject")}>拒绝</button><button className="primary" onClick={() => decide(preview, "accept")}>确认修改</button></div>}
 

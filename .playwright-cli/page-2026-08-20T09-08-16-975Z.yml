@@ -1,0 +1,162 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e3]:
+      - link "ROUTEBOOK/AGENT" [ref=e21] [cursor=pointer]:
+        - /url: /
+      - generic [ref=e5]:
+        - strong [ref=e22]: 2026年9月5日从上海乘高铁往返南京，玩3天，只规划南京市
+        - generic [ref=e10]: planning · 固定读取版本 2
+      - generic [ref=e23]:
+        - button "历史任务" [ref=e24] [cursor=pointer]:
+          - generic [ref=e25]: ≡
+        - generic [ref=e27]: 选择想去的地方
+        - button "撤销" [ref=e28] [cursor=pointer]
+    - generic [ref=e29]:
+      - complementary "规划对话" [ref=e30]:
+        - generic [ref=e31]:
+          - paragraph [ref=e32]: 01 / CONVERSATION
+          - heading "一起把路走顺" [level=2] [ref=e33]
+        - generic [ref=e34]:
+          - article [ref=e35]:
+            - text: 你
+            - paragraph [ref=e36]: 2026年9月5日从上海乘高铁往返南京，玩3天，只规划南京市内行程。喜欢历史建筑、博物馆和自然风景，节奏适中，必去中山陵和南京博物院，不去远郊。
+          - article [ref=e89]:
+            - text: 路书助手
+            - paragraph [ref=e90]: 请选择主要交通方式，也可以交给系统按路线安排。
+          - article [ref=e129]:
+            - text: 你
+            - paragraph [ref=e130]: 地铁和步行为主
+          - article [ref=e143]:
+            - text: 路书助手
+            - paragraph [ref=e144]: 需求已确认，请在右侧查看地点推荐。
+        - generic [ref=e45]:
+          - generic [ref=e46]: 补充需求
+          - textbox "补充需求" [ref=e47]:
+            - /placeholder: 补充出发地、日期、交通方式或偏好
+          - button "发送消息" [disabled] [ref=e48] [cursor=pointer]: ↗
+      - region [ref=e145]:
+        - generic [ref=e50]:
+          - generic [ref=e51]:
+            - paragraph [ref=e52]: 02 / PLACE SELECTION
+            - heading "选择想去的地方" [level=2] [ref=e146]
+            - paragraph [ref=e54]: 接受、排除或替换候选，系统会根据你的反馈继续收敛。
+          - generic [ref=e55]: 等待你的操作
+        - generic [ref=e59]:
+          - generic [ref=e60]:
+            - generic [ref=e61]:
+              - text: 目的地
+              - generic [ref=e62]: 已确认
+            - text: 南京
+          - generic [ref=e63]:
+            - generic [ref=e64]:
+              - text: 天数
+              - generic [ref=e65]: 已确认
+            - text: 3 天
+          - generic [ref=e66]:
+            - generic [ref=e67]:
+              - text: 节奏
+              - generic [ref=e68]: 已确认
+            - text: moderate
+          - generic [ref=e69]:
+            - generic [ref=e70]:
+              - text: 主题
+              - generic [ref=e71]: 已确认
+            - text: 历史建筑、博物馆、自然风景
+        - navigation "选择日期" [ref=e72]
+        - region "地点推荐候选" [ref=e147]:
+          - generic [ref=e148]:
+            - generic [ref=e149]:
+              - paragraph [ref=e150]: PLACE CANDIDATES
+              - heading "先选想去的地方" [level=3] [ref=e151]
+            - generic [ref=e152]: 基于版本 52f00a0a
+          - article [ref=e153]:
+            - generic [ref=e154]:
+              - strong [ref=e155]: 南京博物院
+              - generic [ref=e156]: 玄武区 · museum · 100 分
+            - paragraph [ref=e157]: 南京博物院属于museum，与已确认偏好匹配。
+            - paragraph [ref=e158]: 取舍：位于玄武区，规划时需结合相邻地点评估交通成本。；当前偏好限制远郊地点；该候选仍需在路线阶段复核通勤距离。
+            - generic [ref=e159]: accepted
+          - article [ref=e164]:
+            - generic [ref=e165]:
+              - strong [ref=e166]: 中山陵景区
+              - generic [ref=e167]: 玄武区 · attraction · 87 分
+            - paragraph [ref=e168]: 中山陵景区是符合地点质量门禁的真实景点候选。
+            - paragraph [ref=e169]: 取舍：位于玄武区，规划时需结合相邻地点评估交通成本。；当前偏好限制远郊地点；该候选仍需在路线阶段复核通勤距离。
+            - generic [ref=e170]:
+              - generic [ref=e171]: 等待选择
+              - button "不感兴趣" [ref=e172] [cursor=pointer]
+              - button "太远" [ref=e173] [cursor=pointer]
+              - button "加入行程" [ref=e174] [cursor=pointer]
+          - article [ref=e175]:
+            - generic [ref=e176]:
+              - strong [ref=e177]: 南京市民俗博物馆
+              - generic [ref=e178]: 秦淮区 · museum · 70 分
+            - paragraph [ref=e179]: 南京市民俗博物馆属于museum，与已确认偏好匹配。
+            - paragraph [ref=e180]: 取舍：位于秦淮区，规划时需结合相邻地点评估交通成本。；当前偏好限制远郊地点；该候选仍需在路线阶段复核通勤距离。
+            - generic [ref=e181]:
+              - generic [ref=e182]: 等待选择
+              - button "不感兴趣" [ref=e183] [cursor=pointer]
+              - button "太远" [ref=e184] [cursor=pointer]
+              - button "加入行程" [ref=e185] [cursor=pointer]
+          - article [ref=e186]:
+            - generic [ref=e187]:
+              - strong [ref=e188]: 中国科举博物馆(江南贡院)
+              - generic [ref=e189]: 秦淮区 · attraction · 57 分
+            - paragraph [ref=e190]: 中国科举博物馆(江南贡院)是符合地点质量门禁的真实景点候选。
+            - paragraph [ref=e191]: 取舍：位于秦淮区，规划时需结合相邻地点评估交通成本。；当前偏好限制远郊地点；该候选仍需在路线阶段复核通勤距离。
+            - generic [ref=e192]:
+              - generic [ref=e193]: 等待选择
+              - button "不感兴趣" [ref=e194] [cursor=pointer]
+              - button "太远" [ref=e195] [cursor=pointer]
+              - button "加入行程" [ref=e196] [cursor=pointer]
+          - article [ref=e197]:
+            - generic [ref=e198]:
+              - strong [ref=e199]: 钟山风景名胜区中山陵景区音乐台
+              - generic [ref=e200]: 玄武区 · attraction · 70 分
+            - paragraph [ref=e201]: 钟山风景名胜区中山陵景区音乐台是符合地点质量门禁的真实景点候选。
+            - paragraph [ref=e202]: 取舍：位于玄武区，规划时需结合相邻地点评估交通成本。；当前偏好限制远郊地点；该候选仍需在路线阶段复核通勤距离。
+            - generic [ref=e203]:
+              - generic [ref=e204]: 等待选择
+              - button "不感兴趣" [ref=e205] [cursor=pointer]
+              - button "太远" [ref=e206] [cursor=pointer]
+              - button "加入行程" [ref=e207] [cursor=pointer]
+          - article [ref=e208]:
+            - generic [ref=e209]:
+              - strong [ref=e210]: 中山陵祭堂
+              - generic [ref=e211]: 玄武区 · attraction · 70 分
+            - paragraph [ref=e212]: 中山陵祭堂是符合地点质量门禁的真实景点候选。
+            - paragraph [ref=e213]: 取舍：位于玄武区，规划时需结合相邻地点评估交通成本。；当前偏好限制远郊地点；该候选仍需在路线阶段复核通勤距离。
+            - generic [ref=e214]:
+              - generic [ref=e215]: 等待选择
+              - button "不感兴趣" [ref=e216] [cursor=pointer]
+              - button "太远" [ref=e217] [cursor=pointer]
+              - button "加入行程" [ref=e218] [cursor=pointer]
+          - article [ref=e219]:
+            - generic [ref=e220]:
+              - strong [ref=e221]: 中山陵南广场
+              - generic [ref=e222]: 玄武区 · park · 70 分
+            - paragraph [ref=e223]: 中山陵南广场是符合地点质量门禁的真实景点候选。
+            - paragraph [ref=e224]: 取舍：位于玄武区，规划时需结合相邻地点评估交通成本。；当前偏好限制远郊地点；该候选仍需在路线阶段复核通勤距离。
+            - generic [ref=e225]:
+              - generic [ref=e226]: 等待选择
+              - button "不感兴趣" [ref=e227] [cursor=pointer]
+              - button "太远" [ref=e228] [cursor=pointer]
+              - button "加入行程" [ref=e229] [cursor=pointer]
+          - article [ref=e230]:
+            - generic [ref=e231]:
+              - strong [ref=e232]: 南京古生物博物馆
+              - generic [ref=e233]: 玄武区 · museum · 67 分
+            - paragraph [ref=e234]: 南京古生物博物馆属于museum，与已确认偏好匹配。
+            - paragraph [ref=e235]: 取舍：位于玄武区，规划时需结合相邻地点评估交通成本。；当前偏好限制远郊地点；该候选仍需在路线阶段复核通勤距离。
+            - generic [ref=e236]:
+              - generic [ref=e237]: 等待选择
+              - button "不感兴趣" [ref=e238] [cursor=pointer]
+              - button "太远" [ref=e239] [cursor=pointer]
+              - button "加入行程" [ref=e240] [cursor=pointer]
+          - generic [ref=e241]:
+            - generic [ref=e242]: 已选 1 个 · 再选 2 个即可生成
+            - button "还需选择 2 个地点" [disabled] [ref=e245]
+        - group [ref=e127]:
+          - generic "版本历史 · 2" [ref=e244] [cursor=pointer]
+    - paragraph [ref=e88]: 地点推荐已生成，请选择想去的地点
+  - alert [ref=e20]

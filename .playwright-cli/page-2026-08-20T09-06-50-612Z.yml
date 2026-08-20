@@ -1,0 +1,22 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: ROUTEBOOK/AGENT
+      - generic [ref=e5]:
+        - button "历史任务 查看" [ref=e6] [cursor=pointer]:
+          - generic [ref=e7]: ≡
+          - generic [ref=e8]: 历史任务
+          - generic [ref=e9]: 查看
+        - generic [ref=e10]: 路线不是清单，是一天的呼吸。
+    - generic [ref=e11]:
+      - paragraph [ref=e12]: 从一句话开始 · PHASE 07
+      - heading [level=1] [ref=e13]:
+        - text: 输入旅行需求，
+        - emphasis [ref=e14]: 生成可执行的行程路书。
+      - paragraph [ref=e15]: 告诉我从哪里出发、去哪里、玩几天，以及你绝不能错过的地方。
+      - generic [ref=e16]:
+        - generic [ref=e17]: 描述你的旅行
+        - textbox "描述你的旅行" [ref=e18]:
+          - /placeholder: 例如：9 月从上海自驾去南京三天，想看建筑和梧桐，必去中山陵，不想赶早。
+        - button "开始规划 →" [disabled] [ref=e19]
+  - alert [ref=e20]

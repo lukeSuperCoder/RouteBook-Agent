@@ -6,6 +6,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
 
 from services.api.app.enums import RequirementSource
+from services.api.app.errors import PlaceNotFoundError
 from services.api.app.providers.models import (
     Coordinate,
     DailyForecast,
@@ -141,6 +142,26 @@ def test_multi_query_recall_filters_deduplicates_and_diversifies() -> None:
     museum = next(item for item in result.proposals if item.candidate.provider_place_id == "a")
     assert len(museum.evidence.query_terms) > 1
     assert museum.status.value == "proposed"
+
+
+def test_empty_search_term_does_not_abort_other_recommendation_queries() -> None:
+    attraction = candidate("museum", "南京博物院", category=NormalizedPlaceCategory.MUSEUM)
+    calls = 0
+
+    def search(_query: str, _region: str) -> list[PlaceCandidate]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise PlaceNotFoundError(details={"provider": "amap", "operation": "poi_search"})
+        return [attraction]
+
+    result = RecommendationService(search).recommend(
+        build_recommendation_strategy(requirements()),
+        limit=3,
+    )
+
+    assert calls > 1
+    assert [item.candidate.provider_place_id for item in result.proposals] == ["museum"]
 
 
 def test_rejection_removes_candidate_from_current_routebook_rerank() -> None:

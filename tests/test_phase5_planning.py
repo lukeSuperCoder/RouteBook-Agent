@@ -9,6 +9,7 @@ from services.api.app.errors import ProviderUnavailableError
 from services.api.app.planning.graph import invoke_itinerary_planning_subgraph
 from services.api.app.planning.models import CAPACITY_TEMPLATES, PlanningPlace
 from services.api.app.planning.optimizer import limited_two_opt, route_length
+from services.api.app.planning.persistence import select_must_visit_match
 from services.api.app.planning.service import ItineraryPlanningService, planning_place_id
 from services.api.app.providers.models import (
     Coordinate,
@@ -306,6 +307,25 @@ def test_out_of_range_place_count_is_not_silently_planned() -> None:
 
     assert result.feasible is False
     assert result.conflicts[0].code == "place_count_out_of_range"
+
+
+def test_must_visit_match_prefers_best_scored_selected_place_when_names_overlap() -> None:
+    class Proposal:
+        def __init__(self, place_id: str, name: str, score: float) -> None:
+            self.provider_place_id = place_id
+            self.candidate_jsonb = {"name": name}
+            self.evidence_jsonb = {"final_score": score}
+
+    proposals = [
+        Proposal("music", "钟山风景名胜区中山陵景区音乐台", 0.7),
+        Proposal("main", "中山陵景区", 0.87),
+        Proposal("hall", "中山陵祭堂", 0.7),
+    ]
+
+    selected = select_must_visit_match("中山陵", proposals)  # type: ignore[arg-type]
+
+    assert selected is not None
+    assert selected.provider_place_id == "main"
 
 
 def test_bounded_repair_removes_only_low_priority_places() -> None:

@@ -1,0 +1,7 @@
+[     225ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3000/favicon.ico:0
+[   15773ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3000/backend/api/routebooks/3883fb7b-3bd5-4155-a865-a6c6b6c7902b/recommendations/latest:0
+[   15829ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3000/backend/api/routebooks/3883fb7b-3bd5-4155-a865-a6c6b6c7902b/recommendations/latest:0
+[   28666ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3000/backend/api/routebooks/3883fb7b-3bd5-4155-a865-a6c6b6c7902b/recommendations/latest:0
+[   51449ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3000/backend/api/routebooks/3883fb7b-3bd5-4155-a865-a6c6b6c7902b/recommendations/latest:0
+[   58563ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:3000/backend/api/routebooks/3883fb7b-3bd5-4155-a865-a6c6b6c7902b/recommendations/latest:0
+[  155367ms] [WARNING] Canvas2D: Multiple readback operations using getImageData are faster with the willReadFrequently attribute set to true. See: https://html.spec.whatwg.org/multipage/canvas.html#concept-canvas-will-read-frequently @ https://webapi.amap.com/maps?v=2.0&key=acc02a19fed8c9581449cec1d3541aaa&plugin=AMap.Driving&callback=routebookAmapReady_1787216959861:0

@@ -1,0 +1,110 @@
+- generic [active] [ref=f1e1]:
+  - main [ref=f1e2]:
+    - generic [ref=f1e3]:
+      - generic [ref=f1e4]: ROUTEBOOK/AGENT
+      - generic [ref=f1e5]:
+        - paragraph [ref=f1e6]: 固定版本 v3 · 2026/8/20
+        - link "← 返回继续调整" [ref=f1e7] [cursor=pointer]:
+          - /url: /?routebook=3883fb7b-3bd5-4155-a865-a6c6b6c7902b
+    - generic [ref=f1e8]:
+      - paragraph [ref=f1e9]: A JOURNEY, HELD IN PLACE
+      - heading "2026年9月5日从上海乘高铁往返南京，玩3天，只规划南京市" [level=1] [ref=f1e10]
+      - generic [ref=f1e11]:
+        - generic [ref=f1e12]:
+          - text: 目的地
+          - strong [ref=f1e13]: 南京
+        - generic [ref=f1e14]:
+          - text: 天数
+          - strong [ref=f1e15]: 3 天
+        - generic [ref=f1e16]:
+          - text: 节奏
+          - strong [ref=f1e17]: moderate
+    - region [ref=f1e18]:
+      - generic [ref=f1e19]:
+        - generic [ref=f1e20]:
+          - paragraph [ref=f1e21]: FULL ROUTE / MAP
+          - heading "全程路线地图" [level=2] [ref=f1e22]
+        - paragraph [ref=f1e23]: 按每日行程顺序连接全部 3 个地点
+      - generic [ref=f1e24]:
+        - complementary "分日行程路线" [ref=f1e25]:
+          - generic [ref=f1e26]:
+            - paragraph [ref=f1e27]: 全程路线
+            - strong [ref=f1e28]: 3 天 · 3 个地点
+            - generic [ref=f1e29]: 距离将在路线确认后更新
+          - generic [ref=f1e30]:
+            - generic [ref=f1e31]:
+              - button "第 1 天 2026-09-05 −" [expanded] [ref=f1e32] [cursor=pointer]:
+                - generic [ref=f1e33]: 第 1 天
+                - strong [ref=f1e34]: 2026-09-05
+                - generic [ref=f1e35]: −
+              - list [ref=f1e36]:
+                - listitem [ref=f1e37]:
+                  - button "1 中山陵景区 玄武区" [ref=f1e38] [cursor=pointer]:
+                    - generic [ref=f1e39]: "1"
+                    - generic [ref=f1e41]:
+                      - strong [ref=f1e42]: 中山陵景区
+                      - generic [ref=f1e43]: 玄武区
+            - button "第 2 天 2026-09-06 +" [ref=f1e45] [cursor=pointer]:
+              - generic [ref=f1e46]: 第 2 天
+              - strong [ref=f1e47]: 2026-09-06
+              - generic [ref=f1e48]: +
+            - button "第 3 天 2026-09-07 +" [ref=f1e50] [cursor=pointer]:
+              - generic [ref=f1e51]: 第 3 天
+              - strong [ref=f1e52]: 2026-09-07
+              - generic [ref=f1e53]: +
+        - generic [ref=f1e54]:
+          - generic [ref=f1e55]:
+            - generic [ref=f1e57]:
+              - img "完整行程路线，共 3 个地点" [ref=f1e58]
+              - button "第 1 站 中山陵景区" [ref=f1e60] [cursor=pointer]:
+                - text: "1"
+                - generic [ref=f1e61]: 中山陵景区
+              - button "第 2 站 南京博物院" [ref=f1e62] [cursor=pointer]:
+                - text: "2"
+                - generic [ref=f1e63]: 南京博物院
+              - button "第 3 站 南京市民俗博物馆" [ref=f1e64] [cursor=pointer]:
+                - text: "3"
+                - generic [ref=f1e65]: 南京市民俗博物馆
+              - text: 坐标路线视图
+            - status [ref=f1e66]: 正在加载高德地图…
+          - generic "地图提示" [ref=f1e68]:
+            - generic [ref=f1e69]: ⌖
+            - text: 点击编号查看地点
+    - generic [ref=f1e70]:
+      - article [ref=f1e71]:
+        - generic [ref=f1e72]:
+          - generic [ref=f1e73]: DAY 01
+          - heading "2026-09-05" [level=2] [ref=f1e74]
+        - list [ref=f1e75]:
+          - listitem [ref=f1e76]:
+            - generic [ref=f1e77]: "1"
+            - generic [ref=f1e78]:
+              - strong [ref=f1e79]: 中山陵景区
+              - paragraph [ref=f1e80]: 玄武区
+            - generic [ref=f1e81]: verified
+      - article [ref=f1e82]:
+        - generic [ref=f1e83]:
+          - generic [ref=f1e84]: DAY 02
+          - heading "2026-09-06" [level=2] [ref=f1e85]
+        - list [ref=f1e86]:
+          - listitem [ref=f1e87]:
+            - generic [ref=f1e88]: "1"
+            - generic [ref=f1e89]:
+              - strong [ref=f1e90]: 南京博物院
+              - paragraph [ref=f1e91]: 玄武区
+            - generic [ref=f1e92]: verified
+      - article [ref=f1e93]:
+        - generic [ref=f1e94]:
+          - generic [ref=f1e95]: DAY 03
+          - heading "2026-09-07" [level=2] [ref=f1e96]
+        - list [ref=f1e97]:
+          - listitem [ref=f1e98]:
+            - generic [ref=f1e99]: "1"
+            - generic [ref=f1e100]:
+              - strong [ref=f1e101]: 南京市民俗博物馆
+              - paragraph [ref=f1e102]: 秦淮区
+            - generic [ref=f1e103]: verified
+    - generic [ref=f1e104]:
+      - paragraph [ref=f1e105]: 此页面永久绑定版本 7e10570c
+      - paragraph [ref=f1e106]: 精确地址已隐藏
+  - alert [ref=f1e107]

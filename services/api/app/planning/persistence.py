@@ -13,7 +13,7 @@ from ..enums import (
     WorkflowStatus,
 )
 from ..errors import NotFoundError, WorkflowStateConflictError
-from ..models import WorkflowRunModel
+from ..models import PlaceProposalModel, WorkflowRunModel
 from ..providers.models import PlaceCandidate
 from ..recommendations.models import PlaceProposalStatus
 from ..repositories import RecommendationRepository, RouteBookRepository, WorkflowRunRepository
@@ -28,6 +28,31 @@ from ..schemas import (
 from ..services import VersionService
 from .models import PlanningPlace, PlanningResult
 from .service import planning_place_id
+
+
+def select_must_visit_match(
+    text: str, proposals: list[PlaceProposalModel]
+) -> PlaceProposalModel | None:
+    exact = [
+        proposal
+        for proposal in proposals
+        if text == str(proposal.candidate_jsonb.get("name", ""))
+    ]
+    matches = exact or [
+        proposal
+        for proposal in proposals
+        if text in str(proposal.candidate_jsonb.get("name", ""))
+    ]
+    if not matches:
+        return None
+    return min(
+        matches,
+        key=lambda proposal: (
+            -float(proposal.evidence_jsonb.get("final_score", 0)),
+            len(str(proposal.candidate_jsonb.get("name", ""))),
+            proposal.provider_place_id,
+        ),
+    )
 
 
 class PlanningPersistenceService:
@@ -56,14 +81,9 @@ class PlanningPersistenceService:
         must_ids = set(snapshot.requirements.must_visit_place_ids.value or [])
         unresolved_must_texts: list[str] = []
         for text in snapshot.requirements.must_visit_place_texts.value or []:
-            matches = [
-                proposal
-                for proposal in by_provider_id.values()
-                if text == str(proposal.candidate_jsonb.get("name", ""))
-                or text in str(proposal.candidate_jsonb.get("name", ""))
-            ]
-            if len(matches) == 1:
-                candidate = PlaceCandidate.model_validate(matches[0].candidate_jsonb)
+            match = select_must_visit_match(text, list(by_provider_id.values()))
+            if match is not None:
+                candidate = PlaceCandidate.model_validate(match.candidate_jsonb)
                 must_ids.add(planning_place_id(candidate.provider, candidate.provider_place_id))
             else:
                 unresolved_must_texts.append(text)

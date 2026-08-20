@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Callable
 
+from ..errors import PlaceNotFoundError
 from ..providers.models import PlaceCandidate, PlaceSemanticType
 from ..providers.poi_quality import score_candidates
 from ..weather_policy import INDOOR_CATEGORIES, OUTDOOR_CATEGORIES
@@ -33,9 +34,17 @@ class RecommendationService:
             raise ValueError("recommendation limit must be between 1 and 30")
         recalled: list[tuple[PlaceCandidate, str]] = []
         for query in strategy.query_terms:
-            recalled.extend(
-                (candidate, query)
-                for candidate in self._searcher(query, strategy.geographic_scope.region)
+            try:
+                candidates = self._searcher(query, strategy.geographic_scope.region)
+            except PlaceNotFoundError:
+                continue
+            recalled.extend((candidate, query) for candidate in candidates)
+        if not recalled:
+            raise PlaceNotFoundError(
+                details={
+                    "operation": "recommendation_recall",
+                    "region": strategy.geographic_scope.region,
+                }
             )
 
         grouped: dict[tuple[str, str], tuple[PlaceCandidate, list[str]]] = {}

@@ -1,0 +1,89 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e3]:
+      - link "ROUTEBOOK/AGENT" [ref=e21] [cursor=pointer]:
+        - /url: /
+      - generic [ref=e5]:
+        - strong [ref=e22]: 2026年9月5日从上海乘高铁往返南京，玩3天，只规划南京市
+        - generic [ref=e10]: planning · 固定读取版本 1
+      - generic [ref=e23]:
+        - button "历史任务" [ref=e24] [cursor=pointer]:
+          - generic [ref=e25]: ≡
+        - generic [ref=e27]: 正在理解你的旅行
+        - button "撤销" [disabled] [ref=e28] [cursor=pointer]
+    - generic [ref=e29]:
+      - complementary "规划对话" [ref=e30]:
+        - generic [ref=e31]:
+          - paragraph [ref=e32]: 01 / CONVERSATION
+          - heading "一起把路走顺" [level=2] [ref=e33]
+        - generic [ref=e34]:
+          - article [ref=e35]:
+            - text: 你
+            - paragraph [ref=e36]: 2026年9月5日从上海乘高铁往返南京，玩3天，只规划南京市内行程。喜欢历史建筑、博物馆和自然风景，节奏适中，必去中山陵和南京博物院，不去远郊。
+          - article [ref=e89]:
+            - text: 路书助手
+            - paragraph [ref=e90]: 请选择主要交通方式，也可以交给系统按路线安排。
+          - article [ref=e129]:
+            - text: 你
+            - paragraph [ref=e130]: 地铁和步行为主
+          - article "路书助手正在工作" [ref=e131]:
+            - generic [ref=e136]:
+              - strong [ref=e137]: 已收到回答，正在继续确认需求
+              - generic [ref=e138]: 完成后会自动更新右侧任务面板
+        - generic [ref=e45]:
+          - generic [ref=e46]: 补充需求
+          - textbox "补充需求" [ref=e47]:
+            - /placeholder: 补充出发地、日期、交通方式或偏好
+          - button "发送消息" [disabled] [ref=e48] [cursor=pointer]: ↗
+      - region [ref=e139]:
+        - generic [ref=e50]:
+          - generic [ref=e51]:
+            - paragraph [ref=e52]: 02 / UNDERSTANDING
+            - heading "正在理解你的旅行" [level=2] [ref=e140]
+            - paragraph [ref=e54]: 我会先整理已经明确的条件，再找出真正影响路线的问题。
+          - generic [ref=e55]:
+            - generic [ref=e56]: 任务进行中
+            - button "取消当前任务" [ref=e141] [cursor=pointer]
+        - generic [ref=e59]:
+          - generic [ref=e60]:
+            - generic [ref=e61]:
+              - text: 目的地
+              - generic [ref=e62]: 已确认
+            - text: 南京
+          - generic [ref=e63]:
+            - generic [ref=e64]:
+              - text: 天数
+              - generic [ref=e65]: 已确认
+            - text: 3 天
+          - generic [ref=e66]:
+            - generic [ref=e67]:
+              - text: 节奏
+              - generic [ref=e68]: 已确认
+            - text: moderate
+          - generic [ref=e69]:
+            - generic [ref=e70]:
+              - text: 主题
+              - generic [ref=e71]: 已确认
+            - text: 历史建筑、博物馆、自然风景
+        - navigation "选择日期" [ref=e72]
+        - generic [ref=e73]:
+          - paragraph [ref=e76]: CURRENT TASK
+          - heading "正在理解你的旅行" [level=3] [ref=e142]
+          - paragraph [ref=e78]: 已收到回答，正在继续确认需求
+          - list "规划步骤" [ref=e79]:
+            - listitem [ref=e80]:
+              - generic [ref=e81]: "01"
+              - text: 理解旅行想法
+            - listitem [ref=e82]:
+              - generic [ref=e83]: "02"
+              - text: 确认关键需求
+            - listitem [ref=e84]:
+              - generic [ref=e85]: "03"
+              - text: 选择推荐地点
+            - listitem [ref=e86]:
+              - generic [ref=e87]: "04"
+              - text: 生成完整路线
+        - group [ref=e127]:
+          - generic "版本历史 · 1" [ref=e128] [cursor=pointer]
+    - paragraph [ref=e88]: 已收到回答，正在继续确认需求
+  - alert [ref=e20]
