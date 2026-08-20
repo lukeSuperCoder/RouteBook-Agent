@@ -189,7 +189,8 @@ def test_place_fact_service_enforces_quality_gate() -> None:
     with pytest.raises(PlaceAmbiguousError) as exc_info:
         service.require_auto_adoptable("八达岭长城", region="")
     assert exc_info.value.details["candidate_ids"] == ["A1"]
-    assert "八达岭长城" not in str(exc_info.value.details)
+    assert exc_info.value.details["candidates"][0]["name"] == "八达岭长城"
+    assert exc_info.value.details["candidates"][0]["coordinate"]["coordinate_system"] == "GCJ-02"
 
 
 def test_amap_geocode_and_both_route_modes() -> None:

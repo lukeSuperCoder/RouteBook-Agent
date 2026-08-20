@@ -143,6 +143,31 @@ export interface SystemHealth {
   checkedAt: string;
 }
 
+export interface AmbiguousPlaceCandidate {
+  provider: "amap";
+  provider_place_id: string;
+  name: string;
+  address: string;
+  district: string;
+  coordinate: { longitude: number; latitude: number; coordinate_system: "GCJ-02" };
+  category_raw: string;
+  category_normalized: string;
+  semantic_type: string;
+  status: FactStatus;
+}
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+    public readonly details: Record<string, unknown>,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 const browserApiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "/backend";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -151,8 +176,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { "Content-Type": "application/json", ...init?.headers },
   });
   if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
-    throw new Error(body?.error?.message ?? `请求失败（${response.status}）`);
+    const body = (await response.json().catch(() => null)) as {
+      error?: { code?: string; message?: string; details?: Record<string, unknown> };
+    } | null;
+    throw new ApiError(
+      body?.error?.message ?? `请求失败（${response.status}）`,
+      body?.error?.code ?? "REQUEST_FAILED",
+      body?.error?.details ?? {},
+      response.status,
+    );
   }
   return response.json() as Promise<T>;
 }
@@ -196,15 +228,30 @@ export const routeBookApi = {
     request<WorkflowRun[]>(`/api/routebooks/${id}/workflow-runs/active`),
   cancelWorkflow: (runId: string) =>
     request<WorkflowRun>(`/api/workflow-runs/${runId}/cancel`, { method: "POST" }),
-  editDay: (id: string, dayNumber: number, note: string) =>
+  editDay: (id: string, dayNumber: number, note: string, selectedPlace?: AmbiguousPlaceCandidate) =>
     request<{ status: string; version_id: string | null; proposal: Proposal | null; clarification?: string | null; candidates?: string[] }>(
       `/api/routebooks/${id}/edits`,
       {
         method: "POST",
         body: JSON.stringify({
           operation_id: crypto.randomUUID(),
-          operation: "edit_day",
+          operation: selectedPlace ? "add_place" : "edit_day",
           day_reference: `第${dayNumber}天`,
+          replacement_place: selectedPlace ? {
+            id: crypto.randomUUID(),
+            provider: selectedPlace.provider,
+            provider_place_id: selectedPlace.provider_place_id,
+            name: selectedPlace.name,
+            address: selectedPlace.address,
+            district: selectedPlace.district,
+            longitude: selectedPlace.coordinate.longitude,
+            latitude: selectedPlace.coordinate.latitude,
+            coordinate_system: selectedPlace.coordinate.coordinate_system,
+            category_raw: selectedPlace.category_raw,
+            category_normalized: selectedPlace.category_normalized,
+            semantic_type: selectedPlace.semantic_type,
+            status: selectedPlace.status,
+          } : undefined,
           note,
         }),
       },

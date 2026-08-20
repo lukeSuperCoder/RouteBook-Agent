@@ -149,6 +149,10 @@ class EditingPersistenceService:
             change_summary=plan.change_summary,
             source_user_message=fingerprint,
         )
+        routebook = RouteBookRepository(session).get(routebook_id)
+        if routebook is not None:
+            routebook.status = RouteBookStatus.EDITABLE.value
+        session.flush()
         return EditExecutionResult(version_id=version.id)
 
     @staticmethod

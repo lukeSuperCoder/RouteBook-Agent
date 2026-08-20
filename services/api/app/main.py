@@ -49,6 +49,8 @@ from .presenters import (
 )
 from .progress import ProgressPublisher, build_progress_event, stream_progress
 from .providers.amap import AmapAdapter
+from .providers.models import PlaceCandidate
+from .providers.place_service import PlaceFactService
 from .providers.models import Coordinate, RouteResult
 from .providers.qweather import QWeatherAdapter
 from .recommendations.models import PlaceFeedback, RecommendationResult
@@ -87,6 +89,7 @@ from .schemas import (
     RouteBookMessageCreate,
     RouteBookRead,
     RouteBookSnapshotV1,
+    PlaceSnapshot,
     RouteBookVersionRead,
     SharedRouteBookRead,
     UndoRequest,
@@ -118,6 +121,7 @@ RecommendationRunner = Callable[
 ]
 ItineraryRunner = Callable[[RequirementSnapshot, list[PlanningPlace]], PlanningResult]
 EditRecomputeRunner = Callable[[RouteBookSnapshotV1, ImpactScope], RouteBookSnapshotV1]
+EditPlaceResolver = Callable[[str, str], PlaceCandidate]
 
 
 @asynccontextmanager
@@ -177,12 +181,56 @@ def _recompute_edit_scope(
     return AffectedScopeRecomputer(route, weather.daily_forecast).recompute(snapshot, impact)
 
 
+def _resolve_edit_place(keyword: str, region: str) -> PlaceCandidate:
+    return PlaceFactService(AmapAdapter()).require_auto_adoptable(keyword, region=region)
+
+
+def _place_snapshot(candidate: PlaceCandidate) -> PlaceSnapshot:
+    return PlaceSnapshot(
+        id=uuid4(),
+        provider=candidate.provider,
+        provider_place_id=candidate.provider_place_id,
+        name=candidate.name,
+        address=candidate.address,
+        district=candidate.district,
+        longitude=candidate.coordinate.longitude,
+        latitude=candidate.coordinate.latitude,
+        coordinate_system=candidate.coordinate.coordinate_system,
+        category_raw=candidate.category_raw,
+        category_normalized=candidate.category_normalized.value,
+        semantic_type=candidate.semantic_type.value,
+        status=candidate.status,
+    )
+
+
+def _editing_intent(
+    payload: RouteBookEditRequest,
+    snapshot: RouteBookSnapshotV1,
+    place_resolver: EditPlaceResolver,
+) -> EditIntent:
+    note = (payload.note or "").strip()
+    add_match = re.fullmatch(r"(?:请)?(?:增加|添加|加入|安排|加上)\s*(.+?)(?:到|在)?(?:第?[一二三四五六七1-7]天)?[。！!]?", note)
+    if payload.operation == "edit_day" and add_match:
+        keyword = add_match.group(1).strip()
+        candidate = place_resolver(keyword, str(snapshot.requirements.destination.value or ""))
+        if any(place.provider_place_id == candidate.provider_place_id for place in snapshot.places):
+            raise ValidationAppError(f"{candidate.name}已经在当前行程中，无需重复添加。")
+        return EditIntent(
+            operation="add_place",
+            day_reference=payload.day_reference,
+            replacement_place=_place_snapshot(candidate),
+            note=note,
+        )
+    return EditIntent.model_validate(payload.model_dump(exclude={"operation_id"}, mode="python"))
+
+
 def create_app(
     workflow_dispatcher: WorkflowDispatcher = dispatch_workflow,
     requirement_dispatcher: RequirementWorkflowDispatcher = _dispatch_requirement,
     recommendation_runner: RecommendationRunner = _run_recommendations,
     itinerary_runner: ItineraryRunner = _run_itinerary,
     edit_recompute_runner: EditRecomputeRunner = _recompute_edit_scope,
+    edit_place_resolver: EditPlaceResolver = _resolve_edit_place,
     recommendation_dispatcher: RecommendationWorkflowDispatcher = dispatch_recommendation_workflow,
     itinerary_dispatcher: ItineraryWorkflowDispatcher = dispatch_itinerary_workflow,
 ) -> FastAPI:
@@ -198,6 +246,7 @@ def create_app(
     app.state.recommendation_dispatcher = recommendation_dispatcher
     app.state.itinerary_dispatcher = itinerary_dispatcher
     app.state.edit_recompute_runner = edit_recompute_runner
+    app.state.edit_place_resolver = edit_place_resolver
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.api_cors_origins,
@@ -753,9 +802,7 @@ def create_app(
             base_version_id, snapshot = EditingPersistenceService.load_current(
                 session, routebook_id
             )
-        intent = EditIntent.model_validate(
-            payload.model_dump(exclude={"operation_id"}, mode="python")
-        )
+        intent = _editing_intent(payload, snapshot, app.state.edit_place_resolver)
         plan = invoke_editing_subgraph(snapshot, intent)
         if not plan.resolution.resolved:
             return EditExecutionRead(
@@ -800,7 +847,11 @@ def create_app(
                 reply = (
                     f"{day_label}的修改方案已生成，请在右侧预览并确认。"
                     if result.proposal
-                    else f"已按你的要求重新规划{day_label}，地点顺序和路线数据已同步刷新。"
+                    else (
+                        f"已将{intent.replacement_place.name}加入{day_label}，并重新规划当天地点顺序和路线。"
+                        if intent.operation == "add_place" and intent.replacement_place
+                        else f"已按你的要求重新规划{day_label}，地点顺序和路线数据已同步刷新。"
+                    )
                 )
                 messages.add(
                     ConversationMessageModel(

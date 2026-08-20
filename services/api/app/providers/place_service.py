@@ -62,14 +62,16 @@ class PlaceFactService:
                 }
             )
         if decision.action == AdoptionAction.NEEDS_CONFIRMATION:
+            eligible_candidates = [
+                item
+                for item in evaluation.candidates
+                if not _is_hard_filtered(item.provider_place_id, decision)
+            ]
             raise PlaceAmbiguousError(
                 details={
                     "query_ref": _query_ref(keyword, region),
-                    "candidate_ids": [
-                        item.provider_place_id
-                        for item in evaluation.candidates
-                        if not _is_hard_filtered(item.provider_place_id, decision)
-                    ],
+                    "candidate_ids": [item.provider_place_id for item in eligible_candidates],
+                    "candidates": [item.model_dump(mode="json") for item in eligible_candidates],
                 }
             )
         selected_id = decision.selected_provider_place_id

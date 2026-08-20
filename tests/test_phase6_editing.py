@@ -7,12 +7,14 @@ from services.api.app.editing.graph import invoke_editing_subgraph
 from services.api.app.editing.models import EditIntent
 from services.api.app.editing.recompute import AffectedScopeRecomputer
 from services.api.app.editing.service import EditingService, day_hash
+from services.api.app.main import _editing_intent
 from services.api.app.enums import FactStatus, RequirementSource
 from services.api.app.providers.models import (
     Coordinate,
     DailyForecast,
     FactCollection,
     RouteResult,
+    PlaceCandidate,
 )
 from services.api.app.schemas import (
     ItineraryDaySnapshot,
@@ -22,6 +24,7 @@ from services.api.app.schemas import (
     RouteBookSnapshotV1,
     RouteSegmentSnapshot,
     WeatherSnapshot,
+    RouteBookEditRequest,
 )
 
 
@@ -292,3 +295,49 @@ def test_editing_subgraph_returns_serializable_strict_plan() -> None:
     assert plan.preview is not None
     assert plan.preview.days_plan[0].notes == []
     assert plan.preview.days_plan[0].segment_ids == []
+
+
+def test_natural_add_place_edit_resolves_provider_place() -> None:
+    base = snapshot().model_copy(
+        update={
+            "requirements": snapshot().requirements.model_copy(
+                update={
+                    "destination": RequirementValue(
+                        value="南京",
+                        source=RequirementSource.EXPLICIT,
+                        confidence=1,
+                        confirmed=True,
+                    )
+                }
+            )
+        }
+    )
+    seen: list[tuple[str, str]] = []
+
+    def resolve(keyword: str, region: str) -> PlaceCandidate:
+        seen.append((keyword, region))
+        return PlaceCandidate(
+            provider_place_id="tiananmen",
+            name="天安门",
+            city="南京市",
+            district="玄武区",
+            coordinate=Coordinate(longitude=118.79, latitude=32.04),
+            fetched_at=datetime.now(UTC),
+        )
+
+    intent = _editing_intent(
+        RouteBookEditRequest(
+            operation_id=uid(999),
+            operation="edit_day",
+            day_reference="第2天",
+            note="增加天安门",
+        ),
+        base,
+        resolve,
+    )
+
+    assert seen == [("天安门", "南京")]
+    assert intent.operation == "add_place"
+    assert intent.day_reference == "第2天"
+    assert intent.replacement_place is not None
+    assert intent.replacement_place.name == "天安门"

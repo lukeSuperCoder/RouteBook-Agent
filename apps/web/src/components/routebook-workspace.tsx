@@ -4,6 +4,8 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
+  ApiError,
+  type AmbiguousPlaceCandidate,
   type ConversationMessage,
   type FactStatus,
   type ProgressEvent,
@@ -35,6 +37,25 @@ type OptimisticMessage = {
   text: string;
   status: "sending" | "failed";
 };
+
+type PlaceConfirmation = {
+  dayNumber: number;
+  originalText: string;
+  candidates: AmbiguousPlaceCandidate[];
+};
+
+function ambiguousCandidates(value: unknown): AmbiguousPlaceCandidate[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((candidate): candidate is AmbiguousPlaceCandidate => {
+    if (!candidate || typeof candidate !== "object") return false;
+    const item = candidate as Record<string, unknown>;
+    const coordinate = item.coordinate as Record<string, unknown> | undefined;
+    return typeof item.provider_place_id === "string"
+      && typeof item.name === "string"
+      && typeof coordinate?.longitude === "number"
+      && typeof coordinate?.latitude === "number";
+  });
+}
 
 type ClarificationQuestion = {
   question_id: string;
@@ -149,6 +170,7 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
   const [progress, setProgress] = useState<ProgressEvent | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [placeConfirmation, setPlaceConfirmation] = useState<PlaceConfirmation | null>(null);
   const [optimisticMessages, setOptimisticMessages] = useState<OptimisticMessage[]>([]);
   const [mapOpen, setMapOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -333,7 +355,7 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
     }
   }
 
-  async function submitMessage(rawText: string) {
+  async function submitMessage(rawText: string, selectedPlace?: AmbiguousPlaceCandidate) {
     if (!routebookId || !rawText.trim() || busy) return;
     const text = rawText.trim();
     const optimisticId = `optimistic-${crypto.randomUUID()}`;
@@ -341,6 +363,7 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
     setDraft("");
     setBusy(true);
     setError(null);
+    if (selectedPlace) setPlaceConfirmation(null);
     try {
       if (officialSnapshot?.days_plan.length) {
         setProgress({
@@ -349,7 +372,7 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
           message: `正在理解并检查第 ${activeDay} 天的修改…`,
           progress: { completed: 0, total: 1 },
         });
-        const result = await routeBookApi.editDay(routebookId, activeDay, text);
+        const result = await routeBookApi.editDay(routebookId, activeDay, text, selectedPlace);
         if (result.proposal) {
           setPreview(result.proposal);
           setProgress({
@@ -387,6 +410,20 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
       await refresh(routebookId);
       setOptimisticMessages((current) => current.filter((message) => message.id !== optimisticId));
     } catch (reason) {
+      if (reason instanceof ApiError && reason.code === "PLACE_AMBIGUOUS") {
+        const candidates = ambiguousCandidates(reason.details.candidates);
+        if (candidates.length) {
+          setOptimisticMessages((current) => current.filter((message) => message.id !== optimisticId));
+          setPlaceConfirmation({ dayNumber: activeDay, originalText: text, candidates });
+          setProgress({
+            stage: "waiting_for_place_confirmation",
+            status: "interrupted",
+            message: "找到多个同名地点，请确认具体地点",
+            progress: { completed: 0, total: 1 },
+          });
+          return;
+        }
+      }
       setOptimisticMessages((current) => current.map((message) =>
         message.id === optimisticId ? { ...message, status: "failed" } : message,
       ));
@@ -535,6 +572,25 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
               <p>{message.text}</p>
               {message.status === "failed" && <button type="button" onClick={() => restoreFailedMessage(message)}>放回输入框</button>}
             </article>)}
+            {placeConfirmation && <fieldset className="place-confirmation">
+              <legend>请选择要加入第 {placeConfirmation.dayNumber} 天的具体地点</legend>
+              <p>“{placeConfirmation.originalText}”匹配到多个地点，请根据名称和地址确认：</p>
+              {placeConfirmation.candidates.map((candidate) => <button
+                type="button"
+                key={candidate.provider_place_id}
+                disabled={busy}
+                onClick={() => submitMessage(placeConfirmation.originalText, candidate)}
+              >
+                <strong>{candidate.name}</strong>
+                <small>{[candidate.district, candidate.address].filter(Boolean).join(" · ") || "暂无详细地址"}</small>
+                <span>选择此地点 →</span>
+              </button>)}
+              <button type="button" className="cancel-place-confirmation" onClick={() => {
+                setDraft(placeConfirmation.originalText);
+                setPlaceConfirmation(null);
+                setProgress(null);
+              }}>都不是，修改输入</button>
+            </fieldset>}
             {isActive && <article className="assistant-activity" aria-label="路书助手正在工作">
               <span className="activity-mark" aria-hidden="true"><i /><i /><i /></span>
               <span><strong>{progress?.message ?? "正在接收并整理你的旅行想法"}</strong><small>完成后会自动更新右侧任务面板</small></span>

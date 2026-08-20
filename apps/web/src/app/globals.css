@@ -67,6 +67,16 @@ input:focus-visible { outline:3px solid var(--orange); outline-offset:2px; }
 .choice-grid button.recommended { border:2px solid var(--orange); background:rgba(237,90,42,.05); }
 .choice-grid strong span { float:right; padding:2px 4px; color:var(--cream); background:var(--orange); font-size:.5rem; }
 .choice-grid .recommendation-reason { color:#8d551a; }
+.place-confirmation { margin:14px 16px; padding:16px; border:1px solid #e45a35; background:#fff4ed; }
+.place-confirmation legend { padding:0 6px; font-weight:700; }
+.place-confirmation > p { margin:4px 0 12px; color:var(--muted); font-size:.72rem; line-height:1.5; }
+.place-confirmation > button { display:grid; width:100%; min-height:48px; margin-top:8px; padding:10px 12px; border:1px solid var(--line); background:var(--cream); text-align:left; cursor:pointer; }
+.place-confirmation > button strong,.place-confirmation > button small { display:block; }
+.place-confirmation > button small { margin-top:3px; color:var(--muted); line-height:1.4; }
+.place-confirmation > button span { margin-top:5px; color:var(--moss); font-size:.68rem; font-weight:700; }
+.place-confirmation > button:focus-visible { outline:3px solid #e45a35; outline-offset:2px; }
+.place-confirmation > button:disabled { cursor:wait; opacity:.55; }
+.place-confirmation .cancel-place-confirmation { display:block; width:auto; min-height:48px; border:0; background:transparent; text-decoration:underline; }
 .date-answer input,.date-answer button { min-height:48px; }
 .recommendation-list article:nth-of-type(n+4) { content-visibility:auto; contain-intrinsic-size:auto none auto 180px; }
 @container (max-width:560px) {
