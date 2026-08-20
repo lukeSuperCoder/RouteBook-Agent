@@ -33,6 +33,8 @@ class RecommendationStrategy(RecommendationModel):
     negative_place_texts: list[str] = Field(default_factory=list)
     query_terms: list[str] = Field(min_length=1, max_length=12)
     diversity: DiversityConstraint = Field(default_factory=DiversityConstraint)
+    weather_summary: str | None = None
+    weather_preference: Literal["indoor", "outdoor", "balanced"] | None = None
 
 
 class RecommendationEvidence(RecommendationModel):

@@ -285,6 +285,54 @@ def test_edit_day_replans_only_target_day_routes_and_weather() -> None:
     assert day_hash(base, base.days_plan[1]) == day_hash(recomputed, recomputed.days_plan[1])
 
 
+def test_edit_recomputes_route_facts_for_public_transit_mode() -> None:
+    base = snapshot()
+    base = base.model_copy(
+        update={
+            "requirements": base.requirements.model_copy(
+                update={
+                    "transport_mode": RequirementValue(
+                        value="public_transit",
+                        source=RequirementSource.EXPLICIT,
+                        confidence=1,
+                        confirmed=True,
+                    )
+                }
+            )
+        }
+    )
+    plan = EditingService().plan(
+        base,
+        EditIntent(operation="edit_day", day_reference="第一天", note="调整路线"),
+    )
+    assert plan.preview is not None
+    calls: list[str] = []
+    now = datetime.now(UTC)
+
+    def route(origin: Coordinate, destination: Coordinate, mode: str) -> RouteResult:
+        calls.append(mode)
+        return RouteResult(
+            mode="driving",
+            origin=origin,
+            destination=destination,
+            distance_meters=4_200,
+            duration_seconds=720,
+            fetched_at=now,
+        )
+
+    recomputed = AffectedScopeRecomputer(
+        route,
+        lambda _location: FactCollection(status=FactStatus.UNAVAILABLE, items=[]),
+    ).recompute(plan.preview, plan.impact)
+
+    assert calls == ["public_transit"]
+    assert len(recomputed.route_segments) == 1
+    assert recomputed.route_segments[0].mode == "public_transit"
+    assert recomputed.route_segments[0].distance_meters == 4_200
+    assert recomputed.route_segments[0].duration_seconds == 720
+    assert recomputed.route_segments[0].status == FactStatus.VERIFIED
+
+
 def test_editing_subgraph_returns_serializable_strict_plan() -> None:
     plan = invoke_editing_subgraph(
         snapshot(),

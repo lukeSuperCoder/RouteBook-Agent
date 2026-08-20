@@ -16,6 +16,7 @@ from ..providers.models import (
     WeatherWarning,
 )
 from ..schemas import RequirementSnapshot
+from ..weather_policy import classify_forecast, forecast_for_date
 from .models import (
     CAPACITY_TEMPLATES,
     ItineraryDraft,
@@ -54,13 +55,18 @@ class ItineraryPlanningService:
         days = int(requirements.days.value or 0)
         intensity = requirements.intensity.value or "moderate"
         capacity = CAPACITY_TEMPLATES[intensity]
-        arranged = self._arrange(places, days, capacity.maximum_places)
+        forecasts = self._planning_forecasts(requirements, places)
+        arranged = self._arrange(
+            places, days, capacity.maximum_places, requirements=requirements, forecasts=forecasts
+        )
         attempts = 0
         while attempts <= 3:
             with ThreadPoolExecutor(max_workers=min(7, len(arranged) or 1)) as executor:
                 planned = list(
                     executor.map(
-                        lambda item: self._route_day(item[0] + 1, requirements, item[1], capacity),
+                        lambda item: self._route_day(
+                            item[0] + 1, requirements, item[1], capacity, forecasts
+                        ),
                         enumerate(arranged),
                     )
                 )
@@ -159,7 +165,9 @@ class ItineraryPlanningService:
 
     @staticmethod
     def _arrange(
-        places: list[PlanningPlace], days: int, maximum_places: int
+        places: list[PlanningPlace], days: int, maximum_places: int, *,
+        requirements: RequirementSnapshot | None = None,
+        forecasts: list[DailyForecast] | None = None,
     ) -> list[list[PlanningPlace]]:
         grouped: defaultdict[str, list[PlanningPlace]] = defaultdict(list)
         for place in sorted(places, key=lambda item: item.priority != "must_visit"):
@@ -168,14 +176,41 @@ class ItineraryPlanningService:
         day_index = 0
         for group in grouped.values():
             for place in group:
+                category = place.candidate.category_normalized.value
                 candidates = [i for i, day in enumerate(result) if len(day) < maximum_places]
                 if not candidates:
                     result[day_index % days].append(place)
                     day_index += 1
                     continue
-                target = min(candidates, key=lambda i: (len(result[i]), i))
+                def day_score(
+                    index: int, place_category: str = category
+                ) -> tuple[int, int, int]:
+                    forecast = forecast_for_date(
+                        forecasts or [],
+                        requirements.start_date.value + timedelta(days=index)
+                        if requirements and requirements.start_date.value else None,
+                    )
+                    preference = classify_forecast(forecast) if forecast else None
+                    weather_penalty = 0
+                    if preference and preference.preferred_categories:
+                        weather_penalty = (
+                            0 if place_category in preference.preferred_categories else 1
+                        )
+                    return weather_penalty, len(result[index]), index
+
+                target = min(candidates, key=day_score)
                 result[target].append(place)
         return result
+
+    def _planning_forecasts(
+        self, requirements: RequirementSnapshot, places: list[PlanningPlace]
+    ) -> list[DailyForecast]:
+        if not places or requirements.start_date.value is None:
+            return []
+        try:
+            return self._weather_fetcher(places[0].candidate.coordinate).items
+        except ProviderError:
+            return []
 
     def _route_day(
         self,
@@ -183,22 +218,12 @@ class ItineraryPlanningService:
         requirements: RequirementSnapshot,
         places: list[PlanningPlace],
         capacity: object,
+        forecasts: list[DailyForecast] | None = None,
     ) -> PlannedDay:
         ordered = limited_two_opt(nearest_neighbor(places))
         mode = requirements.transport_mode.value or "driving"
         segments: list[PlannedSegment] = []
         for left, right in zip(ordered, ordered[1:], strict=False):
-            if mode not in {"driving", "walking"}:
-                segments.append(
-                    PlannedSegment(
-                        id=uuid4(),
-                        origin_place_id=left.id,
-                        destination_place_id=right.id,
-                        mode=mode,
-                        status=FactStatus.UNVERIFIED,
-                    )
-                )
-                continue
             try:
                 route = self._route_fetcher(
                     left.candidate.coordinate, right.candidate.coordinate, mode
@@ -229,12 +254,18 @@ class ItineraryPlanningService:
         start = requirements.start_date.value
         from .models import DailyCapacity
 
+        forecast = forecast_for_date(
+            forecasts or [],
+            start + timedelta(days=number - 1) if start is not None else None,
+        )
+        notes = [f"天气安排：{classify_forecast(forecast).summary}"] if forecast else []
         return PlannedDay(
             day_number=number,
             date=start + timedelta(days=number - 1) if start is not None else None,
             places=ordered,
             segments=segments,
             capacity=DailyCapacity.model_validate(capacity),
+            notes=notes,
         )
 
     @staticmethod

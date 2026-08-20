@@ -5,6 +5,7 @@ from collections.abc import Callable
 
 from ..providers.models import PlaceCandidate, PlaceSemanticType
 from ..providers.poi_quality import score_candidates
+from ..weather_policy import INDOOR_CATEGORIES, OUTDOOR_CATEGORIES
 from .models import (
     PlaceFeedback,
     PlaceProposal,
@@ -160,6 +161,14 @@ class RecommendationService:
         if candidate.category_normalized.value in strategy.target_categories:
             score += 0.35
             signals.append("target_category")
+        weather_categories = (
+            INDOOR_CATEGORIES
+            if strategy.weather_preference == "indoor"
+            else OUTDOOR_CATEGORIES if strategy.weather_preference == "outdoor" else set()
+        )
+        if candidate.category_normalized.value in weather_categories:
+            score += 0.15
+            signals.append(f"weather_fit:{strategy.weather_preference}")
         if candidate.district:
             score += 0.1
             signals.append("district_known")
@@ -172,6 +181,11 @@ class RecommendationService:
     def _reason(candidate: PlaceCandidate, signals: list[str]) -> str:
         category = candidate.category_normalized.value
         if "target_category" in signals:
+            weather = next((item for item in signals if item.startswith("weather_fit:")), None)
+            if weather == "weather_fit:indoor":
+                return f"{candidate.name}属于{category}，符合偏好，也适合当前雨雪天气下的室内安排。"
+            if weather == "weather_fit:outdoor":
+                return f"{candidate.name}属于{category}，符合偏好，也适合当前晴好天气下的户外安排。"
             return f"{candidate.name}属于{category}，与已确认偏好匹配。"
         return f"{candidate.name}是符合地点质量门禁的真实景点候选。"
 

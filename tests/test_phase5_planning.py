@@ -31,6 +31,7 @@ def place(
     *,
     district: str = "玄武区",
     priority: str = "accepted",
+    category: NormalizedPlaceCategory = NormalizedPlaceCategory.ATTRACTION,
 ) -> PlanningPlace:
     candidate = PlaceCandidate(
         provider_place_id=place_id,
@@ -42,7 +43,7 @@ def place(
         adcode="320102",
         coordinate=Coordinate(longitude=longitude, latitude=latitude),
         category_raw="风景名胜",
-        category_normalized=NormalizedPlaceCategory.ATTRACTION,
+        category_normalized=category,
         semantic_type=PlaceSemanticType.ATTRACTION,
         fetched_at=datetime.now(UTC),
     )
@@ -69,7 +70,9 @@ def requirements(*, days: int = 2, intensity: str = "moderate") -> RequirementSn
 
 
 def route_fetcher(origin: Coordinate, destination: Coordinate, mode: str) -> RouteResult:
-    assert mode == "driving"
+    assert mode in {
+        "driving", "walking", "public_transit", "taxi", "cycling", "mixed", "system_decides"
+    }
     return RouteResult(
         mode="driving",
         origin=origin,
@@ -164,6 +167,51 @@ def test_plans_continuous_days_and_uses_only_provider_route_facts() -> None:
     )
 
 
+def test_weather_moves_indoor_places_to_rainy_day_and_outdoor_places_to_sunny_day() -> None:
+    now = datetime.now(UTC)
+
+    def mixed_weather(location: Coordinate) -> FactCollection[DailyForecast]:
+        return FactCollection(
+            status=FactStatus.VERIFIED,
+            items=[
+                DailyForecast(
+                    location=location, forecast_date=date(2026, 10, 1), temp_min_c=16,
+                    temp_max_c=20, text_day="中雨", text_night="小雨", wind_scale_day="3",
+                    provider_updated_at=now, fetched_at=now,
+                ),
+                DailyForecast(
+                    location=location, forecast_date=date(2026, 10, 2), temp_min_c=18,
+                    temp_max_c=27, text_day="晴", text_night="晴", wind_scale_day="2",
+                    provider_updated_at=now, fetched_at=now,
+                ),
+            ],
+        )
+
+    planner = ItineraryPlanningService(
+        route_fetcher=route_fetcher,
+        weather_fetcher=mixed_weather,
+        warning_fetcher=warning_fetcher,
+    )
+    places = [
+        place("museum", "南京博物院", 118.83, 32.04, category=NormalizedPlaceCategory.MUSEUM),
+        place("shopping", "室内街区", 118.82, 32.04, category=NormalizedPlaceCategory.SHOPPING),
+        place("park", "玄武湖", 118.79, 32.08, category=NormalizedPlaceCategory.PARK),
+        place("landmark", "中山陵", 118.85, 32.06, category=NormalizedPlaceCategory.LANDMARK),
+    ]
+
+    result = planner.plan(requirements(), places)
+
+    assert result.draft is not None
+    assert {item.candidate.category_normalized for item in result.draft.days[0].places} == {
+        NormalizedPlaceCategory.MUSEUM, NormalizedPlaceCategory.SHOPPING
+    }
+    assert {item.candidate.category_normalized for item in result.draft.days[1].places} == {
+        NormalizedPlaceCategory.PARK, NormalizedPlaceCategory.LANDMARK
+    }
+    assert "优先安排室内活动" in result.draft.days[0].notes[0]
+    assert "适合安排户外活动" in result.draft.days[1].notes[0]
+
+
 def test_unresolved_must_visit_returns_structured_conflict() -> None:
     req = requirements().model_copy(
         update={
@@ -217,7 +265,7 @@ def test_route_and_weather_failures_keep_places_and_mark_degraded() -> None:
     assert result.draft.weather[0].status == FactStatus.UNAVAILABLE
 
 
-def test_flexible_date_and_public_transit_degrade_without_crashing() -> None:
+def test_flexible_date_and_public_transit_still_computes_route_facts() -> None:
     req = requirements(days=1, intensity="compact").model_copy(
         update={
             "start_date": RequirementValue(),
@@ -242,7 +290,10 @@ def test_flexible_date_and_public_transit_degrade_without_crashing() -> None:
     assert result.draft.days[0].date is None
     assert result.draft.weather == []
     assert all(
-        segment.mode == "public_transit" and segment.status == FactStatus.UNVERIFIED
+        segment.mode == "public_transit"
+        and segment.status == FactStatus.VERIFIED
+        and segment.distance_meters == 8_000
+        and segment.duration_seconds == 1_200
         for segment in result.draft.days[0].segments
     )
 

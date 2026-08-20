@@ -74,6 +74,7 @@ class PlannedDay(PlanningModel):
     places: list[PlanningPlace]
     segments: list[PlannedSegment]
     capacity: DailyCapacity
+    notes: list[str] = Field(default_factory=list)
 
 
 class PlanningConflict(PlanningModel):

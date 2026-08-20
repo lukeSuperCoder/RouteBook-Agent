@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Command
@@ -8,6 +8,7 @@ from langgraph.types import Command
 from services.api.app.enums import RequirementSource
 from services.api.app.providers.models import (
     Coordinate,
+    DailyForecast,
     NormalizedPlaceCategory,
     PlaceCandidate,
     PlaceSemanticType,
@@ -93,6 +94,26 @@ def test_strategy_searches_explicit_must_visit_before_generic_queries() -> None:
     strategy = build_recommendation_strategy(confirmed)
 
     assert strategy.query_terms[0] == "中山陵"
+
+
+def test_rain_forecast_prioritizes_indoor_recommendation_queries() -> None:
+    now = datetime.now(UTC)
+    forecast = DailyForecast(
+        location=Coordinate(longitude=118.8, latitude=32.06),
+        forecast_date=date(2026, 10, 1), temp_min_c=16, temp_max_c=20,
+        text_day="中雨", text_night="小雨", wind_scale_day="3",
+        provider_updated_at=now, fetched_at=now,
+    )
+    dated = requirements().model_copy(update={
+        "start_date": RequirementValue(value=date(2026, 10, 1)),
+        "days": RequirementValue(value=1),
+    })
+
+    strategy = build_recommendation_strategy(dated, forecasts=[forecast])
+
+    assert strategy.weather_preference == "indoor"
+    assert strategy.query_terms[0] == "南京室内景点"
+    assert strategy.target_categories[0] == "museum"
 
 
 def test_multi_query_recall_filters_deduplicates_and_diversifies() -> None:

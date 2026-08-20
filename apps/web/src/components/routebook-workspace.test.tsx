@@ -14,7 +14,7 @@ describe("RouteBookWorkspace", () => {
     render(<RouteBookWorkspace initialRouteBookId={null} />);
 
     const submit = screen.getByRole("button", { name: "开始规划 →" });
-    expect(screen.getByRole("heading", { name: /把想去的地方/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /输入旅行需求/ })).toBeInTheDocument();
     expect(submit).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText("描述你的旅行"), {

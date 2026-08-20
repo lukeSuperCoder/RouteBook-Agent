@@ -177,6 +177,7 @@ class PlanningPersistenceService:
                             for fact in draft.weather
                             if fact.place_id in {place.id for place in day.places}
                         ],
+                        notes=day.notes,
                     )
                     for day in draft.days
                 ],

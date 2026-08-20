@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from ..providers.models import NormalizedPlaceCategory
+from ..providers.models import DailyForecast, NormalizedPlaceCategory
 from ..schemas import RequirementSnapshot
+from ..weather_policy import classify_forecast
 from .models import DiversityConstraint, GeographicScope, RecommendationStrategy
 
 THEME_CATEGORY_MAP: dict[str, tuple[str, ...]] = {
@@ -28,6 +29,7 @@ def build_recommendation_strategy(
     requirements: RequirementSnapshot,
     *,
     rejected_reasons: list[str] | None = None,
+    forecasts: list[DailyForecast] | None = None,
 ) -> RecommendationStrategy:
     destination = requirements.destination.value
     if not destination:
@@ -46,6 +48,29 @@ def build_recommendation_strategy(
         categories = ["attraction", "museum", "park", "landmark"]
     if not query_terms:
         query_terms = [f"{destination}必游景点", f"{destination}博物馆", f"{destination}公园"]
+    weather_preference = None
+    weather_summary = None
+    if forecasts:
+        relevant = forecasts
+        start = requirements.start_date.value
+        days = requirements.days.value
+        if start is not None and days:
+            relevant = [item for item in forecasts if 0 <= (item.forecast_date - start).days < days]
+        preferences = [classify_forecast(item) for item in relevant]
+        indoor_count = sum(item.kind == "indoor" for item in preferences)
+        outdoor_count = sum(item.kind == "outdoor" for item in preferences)
+        if indoor_count or outdoor_count:
+            weather_preference = "indoor" if indoor_count >= outdoor_count else "outdoor"
+            if weather_preference == "indoor":
+                categories = ["museum", "dining", "shopping", *categories]
+                query_terms = [f"{destination}室内景点", f"{destination}博物馆", *query_terms]
+            else:
+                categories = ["park", "attraction", "landmark", *categories]
+                query_terms = [f"{destination}户外景点", f"{destination}公园", *query_terms]
+            weather_summary = "；".join(item.summary for item in preferences[:3])
+        elif preferences:
+            weather_preference = "balanced"
+            weather_summary = "；".join(item.summary for item in preferences[:3])
     query_terms = [*(requirements.must_visit_place_texts.value or []), *query_terms]
     query_terms.extend(requirements.optional_place_texts.value or [])
 
@@ -78,4 +103,6 @@ def build_recommendation_strategy(
             maximum_per_district=2 if not allow_suburban else 3,
             minimum_categories=2,
         ),
+        weather_summary=weather_summary,
+        weather_preference=weather_preference,
     )

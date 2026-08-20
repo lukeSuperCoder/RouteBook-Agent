@@ -30,6 +30,7 @@ from .errors import (
     AppError,
     DependencyUnavailableError,
     NotFoundError,
+    ProviderError,
     ValidationAppError,
     WorkflowStateConflictError,
 )
@@ -49,9 +50,8 @@ from .presenters import (
 )
 from .progress import ProgressPublisher, build_progress_event, stream_progress
 from .providers.amap import AmapAdapter
-from .providers.models import PlaceCandidate
+from .providers.models import Coordinate, PlaceCandidate, RouteResult
 from .providers.place_service import PlaceFactService
-from .providers.models import Coordinate, RouteResult
 from .providers.qweather import QWeatherAdapter
 from .recommendations.models import PlaceFeedback, RecommendationResult
 from .recommendations.persistence import RecommendationPersistenceService, present_batch
@@ -75,6 +75,7 @@ from .schemas import (
     FinalizeRouteBookRequest,
     HealthResponse,
     PlaceFeedbackRequest,
+    PlaceSnapshot,
     ProposalDecisionRequest,
     ProposalRead,
     RecommendationBatchRead,
@@ -89,7 +90,6 @@ from .schemas import (
     RouteBookMessageCreate,
     RouteBookRead,
     RouteBookSnapshotV1,
-    PlaceSnapshot,
     RouteBookVersionRead,
     SharedRouteBookRead,
     UndoRequest,
@@ -142,8 +142,17 @@ def _run_recommendations(
         for item in feedback
         if item.action in {"reject", "replace"} and item.reason is not None
     ]
-    strategy = build_recommendation_strategy(requirements, rejected_reasons=rejected_reasons)
     amap = AmapAdapter()
+    forecasts = []
+    try:
+        destination = str(requirements.destination.value or "")
+        location = amap.geocode(destination, city=destination).coordinate
+        forecasts = QWeatherAdapter().daily_forecast(location).items
+    except (ProviderError, ValueError):
+        pass
+    strategy = build_recommendation_strategy(
+        requirements, rejected_reasons=rejected_reasons, forecasts=forecasts
+    )
     service = RecommendationService(lambda query, region: amap.search_places(query, region=region))
     return service.recommend(strategy, limit=limit, feedback=feedback)
 

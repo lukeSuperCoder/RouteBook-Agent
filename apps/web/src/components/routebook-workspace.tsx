@@ -513,7 +513,7 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
         <header className="topbar"><b>ROUTEBOOK<span>/</span>AGENT</b><small>路线不是清单，是一天的呼吸。</small></header>
         <section className="welcome-card">
           <p className="kicker">从一句话开始 · PHASE 07</p>
-          <h1>把想去的地方，<em>排成走得通的一天。</em></h1>
+          <h1>输入旅行需求，<em>生成可执行的行程路书。</em></h1>
           <p>告诉我从哪里出发、去哪里、玩几天，以及你绝不能错过的地方。</p>
           <form className="starter" onSubmit={createTrip}>
             <label htmlFor="trip-brief">描述你的旅行</label>
@@ -613,10 +613,14 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
           {!places.length && !recommendations ? <PlanningEmptyState phase={phase} progress={progress} /> : places.length ? <ol className="stops">
             {places.map((place, index) => {
               const segment = snapshot?.route_segments.find((item) => item.origin_place_id === place.id);
+              const dayWeather = day && snapshot ? snapshot.weather.find((item) => day.weather_refs.includes(item.ref)) : undefined;
+              const weatherText = typeof dayWeather?.payload.text_day === "string"
+                ? dayWeather.payload.text_day
+                : typeof dayWeather?.payload.textDay === "string" ? dayWeather.payload.textDay : null;
               return <li key={place.id}>
                 <div className="stop-row">
                   <span className="stop-index">{String(index + 1).padStart(2, "0")}</span>
-                  <span><strong>{place.name}</strong><small>{place.district} · {place.semantic_type}</small></span>
+                  <span><strong>{place.name}</strong><small>{place.district} · {place.semantic_type}</small>{weatherText && <small className="place-weather" aria-label={`第 ${activeDay} 天天气：${weatherText}`}>☁ {weatherText} · 当日天气</small>}</span>
                   <span className={`fact-status ${place.status}`}>{statusCopy[place.status]}</span>
                 </div>
                 {segment && <p className="segment">↓ {segment.distance_meters ? `${(segment.distance_meters / 1000).toFixed(1)} km` : "距离未知"} · {segment.duration_seconds ? `${Math.round(segment.duration_seconds / 60)} 分钟` : "耗时未知"} <span className={`fact-status ${segment.status}`}>{statusCopy[segment.status]}</span></p>}
@@ -708,7 +712,16 @@ function DayFacts({ day, snapshot }: {
   });
   if (!weather.length && !warnings.length && !day.notes.length) return null;
   return <section className="day-facts" aria-label="天气、预警和行程备注">
-    {weather.map((item) => <span key={item.ref} className={`weather-fact ${item.status}`}><small>天气</small>{typeof item.payload.textDay === "string" ? item.payload.textDay : "预报已记录"}<i>{statusCopy[item.status]}</i></span>)}
+    {weather.map((item) => {
+      const place = snapshot.places.find((candidate) => candidate.id === item.place_id);
+      const tempMin = typeof item.payload.temp_min_c === "number" ? item.payload.temp_min_c : item.payload.tempMinC;
+      const tempMax = typeof item.payload.temp_max_c === "number" ? item.payload.temp_max_c : item.payload.tempMaxC;
+      const textDay = typeof item.payload.text_day === "string" ? item.payload.text_day : item.payload.textDay;
+      const temperature = typeof tempMin === "number" && typeof tempMax === "number"
+        ? `${tempMin}–${tempMax}℃`
+        : null;
+      return <span key={item.ref} className={`weather-fact ${item.status}`}><small>{place?.name ? `${place.name} · 天气` : "天气"}</small>{typeof textDay === "string" ? textDay : "预报已记录"}{temperature ? ` · ${temperature}` : ""}<i>{statusCopy[item.status]}</i></span>;
+    })}
     {warnings.map((warning, index) => <span key={index} className="warning-fact"><small>预警</small>{typeof warning.title === "string" ? warning.title : "天气风险提示"}</span>)}
     {day.notes.map((note) => <span key={note} className="note-fact"><small>备注</small>{note}</span>)}
   </section>;
