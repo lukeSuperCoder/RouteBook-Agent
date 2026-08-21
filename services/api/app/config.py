@@ -39,6 +39,14 @@ class Settings(BaseSettings):
     amap_base_url: str = "https://restapi.amap.com"
     qweather_api_key: SecretStr | None = None
     qweather_api_host: str = ""
+    zhipu_mcp_api_key: SecretStr | None = None
+    zhipu_web_search_mcp_url: str = "https://open.bigmodel.cn/api/mcp/web_search_prime/mcp"
+    enrichment_enabled: bool = True
+    enrichment_max_search_requests: int = Field(default=12, ge=0, le=50)
+    enrichment_max_places: int = Field(default=12, ge=0, le=50)
+    enrichment_max_results: int = Field(default=5, ge=1, le=10)
+    enrichment_timeout_seconds: float = Field(default=12.0, gt=0, le=60)
+    enrichment_cache_ttl_seconds: int = Field(default=604800, gt=0)
     provider_connect_timeout_seconds: float = Field(default=3.0, gt=0)
     provider_read_timeout_seconds: float = Field(default=8.0, gt=0)
     provider_max_attempts: int = Field(default=2, ge=1, le=4)

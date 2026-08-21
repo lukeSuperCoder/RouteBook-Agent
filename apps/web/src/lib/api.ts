@@ -40,6 +40,17 @@ export interface RouteBookSnapshot {
     status: FactStatus;
   }>;
   weather: Array<{ ref: string; place_id: string; status: FactStatus; payload: Record<string, unknown> }>;
+  place_enrichments?: Array<{
+    place_id: string;
+    summary: string | null;
+    guide_text: string | null;
+    highlights: Array<{ type: string; label: string; text: string; source_ids: string[]; confidence: number; status: FactStatus }>;
+    tips: Array<{ type: string; label: string; text: string; source_ids: string[]; confidence: number; status: FactStatus }>;
+    sources: Array<{ id: string; title: string; url: string; site_name: string | null; source_type: string; published_at: string | null; retrieved_at: string }>;
+    generated_at: string;
+    expires_at: string | null;
+    status: FactStatus;
+  }>;
   notes: string[];
   warnings: Array<Record<string, unknown>>;
 }
@@ -230,6 +241,8 @@ export const routeBookApi = {
   ),
   generateItinerary: (id: string) =>
     request<WorkflowAccepted>(`/api/routebooks/${id}/itinerary`, { method: "POST" }),
+  enrich: (id: string) =>
+    request<WorkflowAccepted>(`/api/routebooks/${id}/enrichments`, { method: "POST" }),
   activeWorkflows: (id: string) =>
     request<WorkflowRun[]>(`/api/routebooks/${id}/workflow-runs/active`),
   cancelWorkflow: (runId: string) =>

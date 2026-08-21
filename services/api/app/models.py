@@ -29,7 +29,7 @@ def utc_now() -> datetime:
 
 ROUTEBOOK_STATUSES = "'draft','planning','pending_confirmation','editable','blocked','final'"
 WORKFLOW_STATUSES = "'queued','running','interrupted','completed','failed','cancelled'"
-WORKFLOW_TYPES = "'create','edit','refresh','finalize','recommend','plan'"
+WORKFLOW_TYPES = "'create','edit','refresh','finalize','recommend','plan','enrich'"
 PROPOSAL_STATUSES = "'pending','accepted','rejected','expired'"
 MESSAGE_ROLES = "'user','assistant','system'"
 MESSAGE_KINDS = "'requirement_input','requirement_clarification','status'"

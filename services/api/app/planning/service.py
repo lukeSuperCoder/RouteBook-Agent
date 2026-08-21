@@ -200,6 +200,11 @@ class ItineraryPlanningService:
 
                 target = min(candidates, key=day_score)
                 result[target].append(place)
+        if len(places) >= days:
+            for empty_index in [index for index, day in enumerate(result) if not day]:
+                donor_index = max(range(days), key=lambda index: len(result[index]))
+                if len(result[donor_index]) > 1:
+                    result[empty_index].append(result[donor_index].pop())
         return result
 
     def _planning_forecasts(

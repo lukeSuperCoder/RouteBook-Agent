@@ -131,6 +131,41 @@ class WeatherSnapshot(ApiModel):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class ContentSourceSnapshot(ApiModel):
+    id: str
+    title: str
+    url: str
+    site_name: str | None = None
+    source_type: Literal[
+        "official", "government", "trusted_travel_platform", "content_platform", "unknown"
+    ] = "unknown"
+    published_at: datetime | None = None
+    retrieved_at: datetime
+
+
+class PlaceHighlightSnapshot(ApiModel):
+    type: Literal[
+        "closure", "opening_hours", "last_entry", "ticket", "reservation", "duration", "tip"
+    ]
+    label: str = Field(min_length=1, max_length=20)
+    text: str = Field(min_length=1, max_length=200)
+    source_ids: list[str] = Field(default_factory=list, max_length=3)
+    confidence: float = Field(ge=0, le=1)
+    status: FactStatus
+
+
+class PlaceEnrichmentSnapshot(ApiModel):
+    place_id: UUID
+    summary: str | None = Field(default=None, max_length=180)
+    guide_text: str | None = Field(default=None, max_length=500)
+    highlights: list[PlaceHighlightSnapshot] = Field(default_factory=list, max_length=5)
+    tips: list[PlaceHighlightSnapshot] = Field(default_factory=list, max_length=3)
+    sources: list[ContentSourceSnapshot] = Field(default_factory=list, max_length=3)
+    generated_at: datetime
+    expires_at: datetime | None = None
+    status: FactStatus
+
+
 class RouteBookSnapshotV1(ApiModel):
     schema_version: Literal[1] = Field(default=1, frozen=True)
     requirements: RequirementSnapshot = Field(default_factory=RequirementSnapshot)
@@ -138,6 +173,7 @@ class RouteBookSnapshotV1(ApiModel):
     days_plan: list[ItineraryDaySnapshot] = Field(default_factory=list)
     route_segments: list[RouteSegmentSnapshot] = Field(default_factory=list)
     weather: list[WeatherSnapshot] = Field(default_factory=list)
+    place_enrichments: list[PlaceEnrichmentSnapshot] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
     warnings: list[dict[str, Any]] = Field(default_factory=list)
 

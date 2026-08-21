@@ -13,6 +13,7 @@ from .config import get_settings
 from .db import SessionFactory
 from .enums import ChangeType, PlanningPhase, WorkflowStage, WorkflowStatus
 from .errors import AppError
+from .models import WorkflowRunModel
 from .observability import (
     configure_logging,
     request_id_context,
@@ -82,6 +83,12 @@ def dispatch_recommendation_workflow(run_id: UUID, request_id: str, limit: int) 
 def dispatch_itinerary_workflow(run_id: UUID, request_id: str) -> None:
     celery_app.send_task(
         "routebook.execute_itinerary_workflow", args=[str(run_id), request_id], task_id=str(run_id)
+    )
+
+
+def dispatch_enrichment_workflow(run_id: UUID, request_id: str) -> None:
+    celery_app.send_task(
+        "routebook.execute_enrichment_workflow", args=[str(run_id), request_id], task_id=str(run_id)
     )
 
 
@@ -430,7 +437,7 @@ def execute_itinerary_workflow(run_id_text: str, request_id: str) -> None:
             run = WorkflowRunRepository(session).get(run_id, for_update=True)
             if run is None or run.status == WorkflowStatus.CANCELLED.value:
                 return
-            PlanningPersistenceService.commit(
+            itinerary_version_id = PlanningPersistenceService.commit(
                 session,
                 routebook_id=routebook_id,
                 base_version_id=base_version_id,
@@ -450,10 +457,141 @@ def execute_itinerary_workflow(run_id_text: str, request_id: str) -> None:
                 total=3,
             )
         )
+        if settings.enrichment_enabled and settings.zhipu_mcp_api_key:
+            with SessionFactory.begin() as session:
+                enrichment_run = WorkflowRunModel(
+                    routebook_id=routebook_id,
+                    run_type="enrich",
+                    base_version_id=itinerary_version_id,
+                    status=WorkflowStatus.QUEUED.value,
+                    current_stage=WorkflowStage.QUEUED.value,
+                    phase=PlanningPhase.ITINERARY_READY.value,
+                    status_message="旅行信息整理已进入队列",
+                )
+                WorkflowRunRepository(session).add(enrichment_run)
+                session.flush()
+                enrichment_run_id = enrichment_run.id
+            dispatch_enrichment_workflow(enrichment_run_id, request_id)
     except Exception:
         log.exception("itinerary workflow failed")
         _mark_failed(run_id, "ITINERARY_FAILED", publisher)
         raise
+
+
+@celery_app.task(name="routebook.execute_enrichment_workflow", acks_late=True)  # type: ignore[untyped-decorator]
+def execute_enrichment_workflow(run_id_text: str, request_id: str) -> None:
+    from .enrichment import (
+        AnthropicEnrichmentSummarizer,
+        EnrichmentBudget,
+        PlaceEnrichmentService,
+        ZhipuWebSearchPrimeProvider,
+    )
+    from .models import utc_now
+    from .providers.cache import build_provider_cache
+
+    run_id = UUID(run_id_text)
+    publisher = ProgressPublisher(settings.redis_url)
+    try:
+        with SessionFactory.begin() as session:
+            run = WorkflowRunRepository(session).get(run_id, for_update=True)
+            if run is None or run.status == WorkflowStatus.CANCELLED.value:
+                return
+            run.status = WorkflowStatus.RUNNING.value
+            run.current_stage = WorkflowStage.SELECTING_ENRICHMENT_PLACES.value
+            run.started_at = run.started_at or utc_now()
+            routebook_id = run.routebook_id
+            base = (
+                VersionRepository(session).get(run.base_version_id) if run.base_version_id else None
+            )
+            if base is None:
+                raise RuntimeError("enrichment base version missing")
+            snapshot = RouteBookSnapshotV1.model_validate(base.snapshot_jsonb)
+        publisher.publish(
+            build_progress_event(
+                run_id=run_id,
+                routebook_id=routebook_id,
+                stage=WorkflowStage.SEARCHING_PLACE_INFORMATION,
+                status=WorkflowStatus.RUNNING,
+                message="正在整理重点地点的旅行信息",
+                completed=0,
+                total=min(len(snapshot.places), settings.enrichment_max_places),
+            )
+        )
+        api_key = (
+            settings.zhipu_mcp_api_key.get_secret_value() if settings.zhipu_mcp_api_key else ""
+        )
+        enrichments = []
+        if api_key and settings.enrichment_enabled:
+            provider = ZhipuWebSearchPrimeProvider(
+                endpoint=settings.zhipu_web_search_mcp_url,
+                api_key=api_key,
+                timeout_seconds=settings.enrichment_timeout_seconds,
+            )
+            service = PlaceEnrichmentService(
+                provider=provider,
+                summarizer=(
+                    AnthropicEnrichmentSummarizer(settings)
+                    if settings.anthropic_api_key
+                    else None
+                ),
+                cache=build_provider_cache(settings),
+                ttl_seconds=settings.enrichment_cache_ttl_seconds,
+            )
+            destination = str(snapshot.requirements.destination.value or "")
+            budget = EnrichmentBudget(
+                max_search_requests=settings.enrichment_max_search_requests,
+                max_places_enriched=settings.enrichment_max_places,
+                max_results_per_search=settings.enrichment_max_results,
+            )
+            enrichments = service.enrich(
+                routebook_id=routebook_id,
+                city=destination,
+                places=snapshot.places,
+                request_id=request_id,
+                budget=budget,
+            )
+        with SessionFactory.begin() as session:
+            run = WorkflowRunRepository(session).get(run_id, for_update=True)
+            if run is None or run.status == WorkflowStatus.CANCELLED.value:
+                return
+            if enrichments:
+                VersionService.commit(
+                    session,
+                    routebook_id=routebook_id,
+                    workflow_run_id=run_id,
+                    base_version_id=run.base_version_id,
+                    snapshot=snapshot.model_copy(update={"place_enrichments": enrichments}),
+                    change_type=ChangeType.EDIT,
+                    change_summary="补充地点开放、预约与游玩提示",
+                )
+            else:
+                run.status = WorkflowStatus.COMPLETED.value
+                run.current_stage = WorkflowStage.COMPLETED.value
+                run.completed_at = utc_now()
+        publisher.publish(
+            build_progress_event(
+                run_id=run_id,
+                routebook_id=routebook_id,
+                stage=WorkflowStage.COMPLETED,
+                status=WorkflowStatus.COMPLETED,
+                message="已完成主要地点攻略整理",
+                completed=len(enrichments),
+                total=len(enrichments),
+            )
+        )
+    except Exception:
+        # Enrichment is non-blocking: preserve the itinerary and hide provider details.
+        log.exception("content enrichment degraded")
+        try:
+            with SessionFactory.begin() as session:
+                run = WorkflowRunRepository(session).get(run_id, for_update=True)
+                if run is not None:
+                    run.status = WorkflowStatus.COMPLETED.value
+                    run.current_stage = WorkflowStage.COMPLETED.value
+                    run.status_message = "地点攻略暂未更新"
+                    run.completed_at = utc_now()
+        except Exception:
+            log.exception("failed to persist enrichment degradation")
 
 
 def _mark_failed(run_id: UUID, error_code: str, publisher: ProgressPublisher) -> None:

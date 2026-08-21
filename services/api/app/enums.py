@@ -26,6 +26,7 @@ class WorkflowRunType(StrEnum):
     FINALIZE = "finalize"
     RECOMMEND = "recommend"
     PLAN = "plan"
+    ENRICH = "enrich"
 
 
 class WorkflowStage(StrEnum):
@@ -45,6 +46,11 @@ class WorkflowStage(StrEnum):
     FAILED = "failed"
     GENERATING_RECOMMENDATIONS = "generating_recommendations"
     SELECTING_PLACES = "selecting_places"
+    SELECTING_ENRICHMENT_PLACES = "selecting_enrichment_places"
+    SEARCHING_PLACE_INFORMATION = "searching_place_information"
+    EXTRACTING_PLACE_FACTS = "extracting_place_facts"
+    GENERATING_PLACE_COPY = "generating_place_copy"
+    SAVING_ENRICHMENT_VERSION = "saving_enrichment_version"
 
 
 class PlanningPhase(StrEnum):

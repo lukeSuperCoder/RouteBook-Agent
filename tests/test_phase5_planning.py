@@ -274,7 +274,10 @@ def test_flexible_date_and_public_transit_still_computes_route_facts() -> None:
                 value="flexible", source=RequirementSource.EXPLICIT, confidence=1, confirmed=True
             ),
             "transport_mode": RequirementValue(
-                value="public_transit", source=RequirementSource.EXPLICIT, confidence=1, confirmed=True
+                value="public_transit",
+                source=RequirementSource.EXPLICIT,
+                confidence=1,
+                confirmed=True,
             ),
         }
     )
@@ -377,6 +380,7 @@ def test_one_to_seven_day_matrix_generates_continuous_itinerary(days: int) -> No
     assert result.feasible is True
     assert result.draft is not None
     assert [day.day_number for day in result.draft.days] == list(range(1, days + 1))
+    assert all(day.places for day in result.draft.days)
     assert [day.date for day in result.draft.days] == [
         date(2026, 10, 1) + timedelta(days=index) for index in range(days)
     ]

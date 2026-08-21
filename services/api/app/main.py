@@ -103,6 +103,7 @@ from .services import (
 )
 from .worker import (
     cancel_workflow,
+    dispatch_enrichment_workflow,
     dispatch_itinerary_workflow,
     dispatch_recommendation_workflow,
     dispatch_requirement_workflow,
@@ -218,7 +219,10 @@ def _editing_intent(
     place_resolver: EditPlaceResolver,
 ) -> EditIntent:
     note = (payload.note or "").strip()
-    add_match = re.fullmatch(r"(?:请)?(?:增加|添加|加入|安排|加上)\s*(.+?)(?:到|在)?(?:第?[一二三四五六七1-7]天)?[。！!]?", note)
+    add_match = re.fullmatch(
+        r"(?:请)?(?:增加|添加|加入|安排|加上)\s*(.+?)(?:到|在)?(?:第?[一二三四五六七1-7]天)?[。！!]?",
+        note,
+    )
     if payload.operation == "edit_day" and add_match:
         keyword = add_match.group(1).strip()
         candidate = place_resolver(keyword, str(snapshot.requirements.destination.value or ""))
@@ -823,6 +827,52 @@ def create_app(
             WorkflowRunRepository(session).add(run)
             session.flush()
         request.app.state.itinerary_dispatcher(run.id, request.state.request_id)
+        return AsyncWorkflowAccepted(
+            workflow_run_id=run.id,
+            workflow_status=WorkflowStatus.QUEUED,
+            status_url=f"/api/workflow-runs/{run.id}",
+            events_url=f"/api/workflow-runs/{run.id}/events",
+        )
+
+    @app.post(
+        "/api/routebooks/{routebook_id}/enrichments",
+        response_model=AsyncWorkflowAccepted,
+        status_code=202,
+        tags=["enrichment"],
+    )
+    def enrich_routebook(
+        routebook_id: UUID,
+        request: Request,
+        session: Session = Depends(get_session),
+        _principal: RequestPrincipal = Depends(get_request_principal),
+    ) -> AsyncWorkflowAccepted:
+        with session.begin():
+            routebook = RouteBookRepository(session).get(routebook_id)
+            if routebook is None or routebook.current_version_id is None:
+                raise NotFoundError(details={"resource": "routebook"})
+            version = VersionRepository(session).get(routebook.current_version_id)
+            if (
+                version is None
+                or not RouteBookSnapshotV1.model_validate(version.snapshot_jsonb).days_plan
+            ):
+                raise WorkflowStateConflictError(details={"reason": "itinerary_not_ready"})
+            if any(
+                item.run_type == WorkflowRunType.ENRICH.value
+                for item in WorkflowRunRepository(session).active_for_routebook(routebook_id)
+            ):
+                raise WorkflowStateConflictError(details={"reason": "enrichment_already_active"})
+            run = WorkflowRunModel(
+                routebook_id=routebook_id,
+                run_type=WorkflowRunType.ENRICH.value,
+                base_version_id=version.id,
+                status=WorkflowStatus.QUEUED.value,
+                current_stage=WorkflowStage.QUEUED.value,
+                phase=PlanningPhase.ITINERARY_READY.value,
+                status_message="旅行信息整理已进入队列",
+            )
+            WorkflowRunRepository(session).add(run)
+            session.flush()
+        dispatch_enrichment_workflow(run.id, request.state.request_id)
         return AsyncWorkflowAccepted(
             workflow_run_id=run.id,
             workflow_status=WorkflowStatus.QUEUED,

@@ -626,17 +626,13 @@ export function RouteBookWorkspace({ initialRouteBookId }: { initialRouteBookId:
           {!places.length && !recommendations ? <PlanningEmptyState phase={phase} progress={progress} /> : places.length ? <ol className="stops">
             {places.map((place, index) => {
               const segment = snapshot?.route_segments.find((item) => item.origin_place_id === place.id);
-              const dayWeather = day && snapshot ? snapshot.weather.find((item) => day.weather_refs.includes(item.ref)) : undefined;
-              const weatherText = typeof dayWeather?.payload.text_day === "string"
-                ? dayWeather.payload.text_day
-                : typeof dayWeather?.payload.textDay === "string" ? dayWeather.payload.textDay : null;
-              return <li key={place.id}>
+              const enrichment = snapshot?.place_enrichments?.find((item) => item.place_id === place.id);
+              return <li key={place.id} className="place-route-row">
                 <div className="stop-row">
                   <span className="stop-index">{String(index + 1).padStart(2, "0")}</span>
-                  <span><strong>{place.name}</strong><small>{place.district} · {place.semantic_type}</small>{weatherText && <small className="place-weather" aria-label={`第 ${activeDay} 天天气：${weatherText}`}>☁ {weatherText} · 当日天气</small>}</span>
-                  <span className={`fact-status ${place.status}`}>{statusCopy[place.status]}</span>
+                  <span className="place-route-facts"><strong>{place.name}</strong><small>{place.district} · {place.semantic_type}</small>{segment ? <small className="segment">↓ {segment.distance_meters ? `${(segment.distance_meters / 1000).toFixed(1)} km` : "距离未知"} · {segment.duration_seconds ? `${Math.round(segment.duration_seconds / 60)} 分钟` : "耗时未知"}</small> : <small className="segment">今日最后一站</small>}</span>
+                  {enrichment && enrichment.status !== "unavailable" ? <PlaceGuideSummary placeName={place.name} enrichment={enrichment} /> : <span className={`fact-status ${place.status}`}>{statusCopy[place.status]}</span>}
                 </div>
-                {segment && <p className="segment">↓ {segment.distance_meters ? `${(segment.distance_meters / 1000).toFixed(1)} km` : "距离未知"} · {segment.duration_seconds ? `${Math.round(segment.duration_seconds / 60)} 分钟` : "耗时未知"} <span className={`fact-status ${segment.status}`}>{statusCopy[segment.status]}</span></p>}
               </li>;
             })}
           </ol> : null}
@@ -826,19 +822,57 @@ function DayFacts({ day, snapshot }: {
     const warningDay = item.day_number;
     return warningDay == null || warningDay === day.day_number;
   });
+  const weatherTexts = [...new Set(weather.flatMap((item) => {
+    const value = item.payload.text_day ?? item.payload.textDay;
+    return typeof value === "string" ? [value] : [];
+  }))];
+  const minimums = weather.flatMap((item) => {
+    const value = item.payload.temp_min_c ?? item.payload.tempMinC;
+    return typeof value === "number" ? [value] : [];
+  });
+  const maximums = weather.flatMap((item) => {
+    const value = item.payload.temp_max_c ?? item.payload.tempMaxC;
+    return typeof value === "number" ? [value] : [];
+  });
+  const warningTitles = [...new Set(warnings.map((item) => typeof item.title === "string" ? item.title : "天气风险提示"))];
   if (!weather.length && !warnings.length && !day.notes.length) return null;
   return <section className="day-facts" aria-label="天气、预警和行程备注">
-    {weather.map((item) => {
-      const place = snapshot.places.find((candidate) => candidate.id === item.place_id);
-      const tempMin = typeof item.payload.temp_min_c === "number" ? item.payload.temp_min_c : item.payload.tempMinC;
-      const tempMax = typeof item.payload.temp_max_c === "number" ? item.payload.temp_max_c : item.payload.tempMaxC;
-      const textDay = typeof item.payload.text_day === "string" ? item.payload.text_day : item.payload.textDay;
-      const temperature = typeof tempMin === "number" && typeof tempMax === "number"
-        ? `${tempMin}–${tempMax}℃`
-        : null;
-      return <span key={item.ref} className={`weather-fact ${item.status}`}><small>{place?.name ? `${place.name} · 天气` : "天气"}</small>{typeof textDay === "string" ? textDay : "预报已记录"}{temperature ? ` · ${temperature}` : ""}<i>{statusCopy[item.status]}</i></span>;
-    })}
-    {warnings.map((warning, index) => <span key={index} className="warning-fact"><small>预警</small>{typeof warning.title === "string" ? warning.title : "天气风险提示"}</span>)}
-    {day.notes.map((note) => <span key={note} className="note-fact"><small>备注</small>{note}</span>)}
+    {weather.length > 0 && <span className="weather-fact">☁ {weatherTexts.join(" / ") || "预报已记录"}{minimums.length && maximums.length ? ` ${Math.min(...minimums)}–${Math.max(...maximums)}℃` : ""}</span>}
+    {warningTitles.length > 0 && <span className="warning-fact">⚠ {warningTitles.join(" · ")}</span>}
+    {day.notes.map((note) => <span key={note} className="note-fact">备注：{note}</span>)}
   </section>;
+}
+
+type PlaceEnrichment = NonNullable<RouteBookSnapshot["place_enrichments"]>[number];
+
+function PlaceGuideSummary({ placeName, enrichment }: { placeName: string; enrichment: PlaceEnrichment }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const openTimer = useRef<number | null>(null);
+  const closeTimer = useRef<number | null>(null);
+  const [pinned, setPinned] = useState(false);
+  const panelId = `place-guide-${enrichment.place_id}`;
+  const open = () => {
+    if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    openTimer.current = window.setTimeout(() => panelRef.current?.showPopover?.(), 150);
+  };
+  const close = () => {
+    if (openTimer.current) window.clearTimeout(openTimer.current);
+    if (!pinned) closeTimer.current = window.setTimeout(() => panelRef.current?.hidePopover?.(), 200);
+  };
+  const togglePinned = () => {
+    const next = !pinned;
+    setPinned(next);
+    if (next) panelRef.current?.showPopover?.(); else panelRef.current?.hidePopover?.();
+  };
+  return <div className="place-guide-cell">
+    <div className="guide-copy">{enrichment.summary && <p className="guide-summary">{enrichment.summary}</p>}{enrichment.tips[0] && <p className="guide-tip">Tips：{enrichment.tips[0].text}</p>}</div>
+    <button type="button" className="guide-trigger" aria-label={`查看${placeName}完整攻略`} aria-controls={panelId} aria-expanded={pinned} onMouseEnter={open} onMouseLeave={close} onFocus={open} onBlur={close} onClick={togglePinned}>i</button>
+    <div ref={panelRef} id={panelId} popover="auto" className="place-guide-popover" onMouseEnter={() => { if (closeTimer.current) window.clearTimeout(closeTimer.current); }} onMouseLeave={close} onToggle={(event) => { if (event.newState === "closed") setPinned(false); }}>
+      <header><span><small>PLACE NOTES</small><strong>{placeName} · 游玩攻略</strong></span><button type="button" aria-label="关闭攻略" onClick={() => panelRef.current?.hidePopover?.()}>×</button></header>
+      {enrichment.guide_text && <section><h4>建议玩法</h4><p>{enrichment.guide_text}</p></section>}
+      {enrichment.highlights.length > 0 && <section><h4>关键信息</h4><ul>{enrichment.highlights.map((item) => <li key={`${item.type}-${item.text}`}><strong>{item.label}</strong>{item.text}</li>)}</ul></section>}
+      {enrichment.tips.length > 0 && <section><h4>Tips</h4><ul>{enrichment.tips.map((item) => <li key={item.text}>{item.text}</li>)}</ul></section>}
+      {enrichment.sources.length > 0 && <footer><small>来源 · {new Date(enrichment.generated_at).toLocaleString("zh-CN")}</small>{enrichment.sources.map((source) => <a key={source.id} href={source.url} target="_blank" rel="noopener noreferrer">{source.site_name ?? source.title} ↗</a>)}</footer>}
+    </div>
+  </div>;
 }
